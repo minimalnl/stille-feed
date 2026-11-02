@@ -13,7 +13,7 @@ const PIX_PAGE = 6;
 
 const $ = (s) => document.querySelector(s);
 const pix = { pieces: [], shown: 0, gen: 0 };
-const state = { address: null, items: [], filter: 'all', fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
+const state = { address: null, items: [], filter: 'moment', fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
