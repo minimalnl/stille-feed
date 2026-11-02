@@ -131,6 +131,8 @@ async function loadMoments(address, offset) {
 }
 
 // ---------- Hup ----------
+const HUP_CONTRACT = '0xf6eeC4e32a532b23ACC56b72865e79c79877CEc8';
+const HUP_POST_EVENT = '0x2b0f8061dba8658af5020cdf9b9fbe0683e46889ba7255a2a14b30df824ed6d5';
 let hupBase = null;
 async function hupGet(path) {
   const bases = hupBase ? [hupBase] : HUP_BASES;
@@ -146,7 +148,48 @@ function hupText(md) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 }
+function extractIPFSCID(data) {
+  const m = data.match(/Qm[1-9A-HJ-NP-Za-km-z]{44}/);
+  return m ? m[0] : null;
+}
+async function loadHupFromChain(address, limit) {
+  const res = await getJSON(RPC, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getLogs', params: [{
+      address: HUP_CONTRACT, fromBlock: '0x1', toBlock: 'latest',
+      topics: [HUP_POST_EVENT, null, '0x000000000000000000000000' + address.slice(2).toLowerCase()]
+    }] }),
+  });
+  const logs = (res.result || []).slice(-limit).reverse();
+  const posts = await Promise.all(logs.map(async (log) => {
+    try {
+      const postId = parseInt(log.topics[1], 16);
+      const networkId = parseInt(log.topics[3], 16) || 42;
+      const buf = new Uint8Array(log.data.slice(2).match(/../g).map((b) => parseInt(b, 16)));
+      const cid = extractIPFSCID(new TextDecoder().decode(buf));
+      if (!cid) return null;
+      const content = await getJSON(ipfs('ipfs://' + cid));
+      const els = content.elements || [];
+      const text = els.find((e) => e.type === 'text')?.data?.text || '';
+      const media = els.find((e) => e.type === 'media')?.data?.items || [];
+      const block = await getJSON(RPC, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBlockByNumber', params: [log.blockNumber, false] }),
+      });
+      const t = parseInt(block.result.timestamp, 16) * 1000;
+      return {
+        kind: 'hup', t, html: hupText(text),
+        images: media.filter((m) => m.type === 'image' && m.cid).map((m) => ipfs(m.cid)).slice(0, 4),
+        link: `https://hup.social/networks/${networkId}/${postId}`,
+      };
+    } catch { return null; }
+  }));
+  return posts.filter((p) => p);
+}
 async function loadHup(address, page) {
+  if (page === 1) {
+    try { return { more: false, items: await loadHupFromChain(address, PAGE) }; } catch (e) { console.warn('Hup chain load failed:', e); }
+  }
   const d = await hupGet(`/networks/posts?wallet_address=${address}&network_id=42&post_type=original&limit=${PAGE}&page=${page}`);
   return {
     more: !!d.nextPage,
@@ -206,7 +249,7 @@ async function fetchBatch() {
   if (state.fmOffset === 0 || state.fmMore) jobs.push(loadMoments(state.address, state.fmOffset).then((r) => { state.fmOffset += PAGE; state.fmMore = r.more; return r.items; })
     .catch(() => { state.fmMore = false; state.notes.push('Forever Moments is nu niet bereikbaar.'); return []; }));
   if (state.hupPage === 1 || state.hupMore) jobs.push(loadHup(state.address, state.hupPage).then((r) => { state.hupPage += 1; state.hupMore = r.more; return r.items; })
-    .catch(() => { state.hupMore = false; state.hupBlocked = true; return []; }));
+    .catch((e) => { state.hupMore = false; if (state.hupPage === 1) state.hupBlocked = true; return []; }));
   const res = await Promise.all(jobs);
   state.items.push(...res.flat());
 }
