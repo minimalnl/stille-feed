@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stille feed</title>
+<link rel="icon" href="sun.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <img class="mark" src="sun.svg" alt="" width="44" height="44">
+    <div>
+      <h1>Stille feed</h1>
+      <p class="sub">Moments en posts van één Universal Profile, rustig op een rij.</p>
+    </div>
+  </header>
+
+  <form id="form" class="search" autocomplete="off">
+    <label for="addr" class="sr">Adres van een Universal Profile</label>
+    <input id="addr" name="address" placeholder="0x… adres van een Universal Profile" spellcheck="false">
+    <button type="submit">Bekijk</button>
+  </form>
+  <p id="formError" class="hint" hidden></p>
+
+  <section id="profile" class="profile" aria-live="polite"></section>
+
+  <section id="pixSection" class="pixsec" hidden>
+    <div class="sechead"><h2>Burnt Pix</h2><span id="pixCount"></span></div>
+    <div id="pixGrid" class="pixgrid"></div>
+    <div id="pixFoot"></div>
+  </section>
+
+  <nav class="filters" id="filters" hidden>
+    <button data-f="all" class="on">Alles</button>
+    <button data-f="moment">Moments</button>
+    <button data-f="hup">Hup</button>
+  </nav>
+
+  <section id="feed" class="feed" aria-live="polite"></section>
+  <p id="status" class="status"></p>
+
+  <footer class="foot">
+    <span>Alleen lezen. Geen wallet, geen LYX.</span>
+    <span>Bronnen: LUKSO mainnet · Forever Moments · Hup</span>
+  </footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
