@@ -12,7 +12,7 @@ const LSP4_METADATA = '9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b
 const PIX_PAGE = 6;
 
 const $ = (s) => document.querySelector(s);
-const pix = { ids: [], shown: 0, gen: 0 };
+const pix = { pieces: [], shown: 0, gen: 0 };
 const state = { address: null, items: [], filter: 'all', fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -87,26 +87,30 @@ function pixCard(p) {
 }
 async function showMorePix() {
   const gen = pix.gen;
-  const next = pix.ids.slice(pix.shown, pix.shown + PIX_PAGE);
+  const next = pix.pieces.slice(pix.shown, pix.shown + PIX_PAGE);
   pix.shown += next.length;
   const btn = $('#pixMore'); if (btn) btn.textContent = 'Even geduld…';
   const grid = $('#pixGrid');
-  const ph = next.map(() => { const d = document.createElement('div'); d.className = 'pix skeleton'; grid.appendChild(d); return d; });
-  await Promise.all(next.map((id, i) => loadPixMeta(id).then((p) => { if (gen === pix.gen) ph[i].outerHTML = pixCard(p); })
-    .catch(() => { if (gen === pix.gen) ph[i].remove(); })));
+  next.forEach((p) => { grid.insertAdjacentHTML('beforeend', pixCard(p)); });
   if (gen !== pix.gen) return;
-  const rest = pix.ids.length - pix.shown;
+  const rest = pix.pieces.length - pix.shown;
   $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Meer tonen (${rest})</button>` : '';
   if (rest > 0) $('#pixMore').onclick = showMorePix;
 }
 async function showPix(address) {
-  pix.gen++; pix.ids = []; pix.shown = 0;
+  pix.gen++; pix.pieces = []; pix.shown = 0;
   const sec = $('#pixSection'); sec.hidden = true;
-  try { pix.ids = await loadPixIds(address); } catch { return; }
-  if (!pix.ids.length || address !== state.address) return;
+  let ids = [];
+  try { ids = await loadPixIds(address); } catch { return; }
+  if (!ids.length || address !== state.address) return;
   sec.hidden = false;
-  $('#pixCount').textContent = pix.ids.length === 1 ? '1 stuk' : `${pix.ids.length} stukken`;
-  $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = '';
+  $('#pixCount').textContent = ids.length === 1 ? '1 stuk' : `${ids.length} stukken`;
+  $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = 'Iteraties laden…';
+  const gen = pix.gen;
+  const pieces = await Promise.all(ids.map((id) => loadPixMeta(id).catch(() => null)));
+  if (gen !== pix.gen || address !== state.address) return;
+  pix.pieces = pieces.filter((p) => p).sort((a, b) => (b.iterations || 0) - (a.iterations || 0));
+  $('#pixFoot').innerHTML = '';
   await showMorePix();
 }
 
