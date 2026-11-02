@@ -10,10 +10,11 @@ const PAGE = 12;
 const BURNTPIX = '0x3983151e0442906000dab83c8b1cf3f2d2535f82'; // Burnt Pix (LSP8) op LUKSO mainnet
 const LSP4_METADATA = '9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e';
 const PIX_PAGE = 6;
+const FEED_PAGE = 6;
 
 const $ = (s) => document.querySelector(s);
 const pix = { pieces: [], shown: 0, gen: 0 };
-const state = { address: null, items: [], filter: 'moment', fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
+const state = { address: null, items: [], filter: 'moment', feedShown: FEED_PAGE, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
@@ -241,9 +242,11 @@ function mediaHTML(imgs) {
 }
 function renderFeed() {
   const list = state.items.filter((i) => state.filter === 'all' || i.kind === state.filter).sort((a, b) => b.t - a.t);
+  const shown = list.slice(0, state.feedShown);
+  const remaining = list.length - state.feedShown;
   const hupNote = state.hupBlocked && state.filter !== 'moment' ? `<p class="note">This page can't load Hup posts directly.
     <a href="https://hup.social/${esc(state.address)}" target="_blank" rel="noopener">View the posts on Hup ↗</a></p>` : '';
-  $('#feed').innerHTML = hupNote + (list.length ? list.map((i) => `
+  $('#feed').innerHTML = hupNote + (shown.length ? shown.map((i) => `
     <article class="item">
       ${mediaHTML(i.images)}
       <div class="body">
@@ -257,10 +260,14 @@ function renderFeed() {
         ${i.kind === 'moment' ? (i.text ? `<p class="text clamp">${esc(i.text)}</p>` : '') : `<p class="text">${i.html}</p>`}
       </div>
     </article>`).join('') : (hupNote ? '' : `<p class="empty">Nothing here yet.</p>`));
-  const more = state.fmMore || state.hupMore;
+  const apiMore = state.fmMore || state.hupMore;
+  const showFeedMore = remaining > 0;
   $('#status').innerHTML = (state.notes.length ? esc(state.notes.join(' ')) + ' ' : '') +
-    (more ? `<button class="more" id="more">Load more</button>` : '');
-  if (more) $('#more').onclick = loadMore;
+    (showFeedMore ? `<button class="more" id="feedMore">Show more (${remaining})</button>` : '') +
+    (showFeedMore && apiMore ? ' ' : '') +
+    (apiMore ? `<button class="more" id="more">Load more</button>` : '');
+  if (showFeedMore) $('#feedMore').onclick = () => { state.feedShown += FEED_PAGE; renderFeed(); };
+  if (apiMore) $('#more').onclick = loadMore;
 }
 
 async function fetchBatch() {
@@ -275,7 +282,7 @@ async function fetchBatch() {
 async function loadMore() { $('#status').textContent = 'One moment…'; state.notes = []; await fetchBatch(); renderFeed(); }
 
 async function show(address) {
-  Object.assign(state, { address, hupBlocked: false, items: [], fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] });
+  Object.assign(state, { address, hupBlocked: false, items: [], feedShown: FEED_PAGE, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] });
   $('#formError').hidden = true;
   $('#addr').value = address;
   $('#filters').hidden = true;
@@ -302,6 +309,7 @@ $('#form').addEventListener('submit', (e) => {
 $('#filters').addEventListener('click', (e) => {
   const f = e.target.dataset?.f; if (!f) return;
   state.filter = f;
+  state.feedShown = FEED_PAGE;
   document.querySelectorAll('#filters button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
   renderFeed();
 });
