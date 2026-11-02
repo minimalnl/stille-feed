@@ -6,6 +6,7 @@ on:
       - main
   schedule:
     - cron: '17 4 * * *' # daily: refresh Burnt Pix thumbnails (iterations change over time)
+    - cron: '*/15 * * * *' # Generative Grid: render new mints (deploys only when something was minted)
   workflow_dispatch:
 
 permissions:
@@ -14,7 +15,10 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  FREQUENT: ${{ github.event.schedule == '*/15 * * * *' }}
 
 jobs:
   deploy:
@@ -28,21 +32,60 @@ jobs:
         with:
           node-version: 20
 
+      # thumbs/ and gg/ are generated, not committed: keep them between runs.
+      - name: Restore generated images
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            thumbs
+            gg
+          key: generated-${{ github.run_id }}
+          restore-keys: generated-
+
+      - name: New Generative Grid mints?
+        id: check
+        run: |
+          if [ "$FREQUENT" = "true" ]; then node scripts/build-gg.mjs --check; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install build tools
+        if: steps.check.outputs.changed == 'true'
+        run: npm install --no-save --no-package-lock sharp@0.33.5 playwright-core@1.48.2
+
       - name: Build Burnt Pix thumbnails
         # If this fails the site still deploys; app.js then falls back to live on-chain loading.
+        if: steps.check.outputs.changed == 'true' && (env.FREQUENT != 'true' || hashFiles('thumbs/index.json') == '')
         continue-on-error: true
-        run: |
-          npm install --no-save --no-package-lock sharp@0.33.5
-          node scripts/build-thumbs.mjs
-          rm -rf node_modules
+        run: node scripts/build-thumbs.mjs
+
+      - name: Render Generative Grid PNGs
+        # Images for wallets/marketplaces: gg/<chainId>/<n>.png and <n>-600.png (Chrome is preinstalled on the runner).
+        if: steps.check.outputs.changed == 'true'
+        continue-on-error: true
+        run: node scripts/build-gg.mjs
+
+      - name: Save generated images
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            thumbs
+            gg
+          key: generated-${{ github.run_id }}
+
+      - name: Clean up
+        if: steps.check.outputs.changed == 'true'
+        run: rm -rf node_modules
 
       - name: Setup Pages
+        if: steps.check.outputs.changed == 'true'
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
+        if: steps.check.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
 
       - name: Deploy to GitHub Pages
+        if: steps.check.outputs.changed == 'true'
         uses: actions/deploy-pages@v4

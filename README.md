@@ -18,3 +18,12 @@ Sources:
 - Hup: https://hup.social/api/v1/networks/posts?wallet_address=…&network_id=42&post_type=original
   Hup doesn't send CORS headers, so serve.py proxies this as /hup-api/* (GET only).
   On static hosting (e.g. GitHub Pages) the page shows a message with a link to the Hup profile instead of an error.
+
+Generative Grid (mint block, `grid-ad.js`):
+- Inside the LUKSO Grid it mints via up-provider; in a normal browser via the Universal Profile extension
+  (EIP-6963, `window.lukso`, fallback `window.ethereum`), switching/adding LUKSO Testnet (4201) when needed.
+- `?gg=<number>` shows that minted piece in the preview.
+- Token images: the contract (v3) returns per-token LSP4Metadata on-chain (a data: JSON with the seed) whose images
+  point to `gg/<chainId>/<n>.png` (2400 px) and `<n>-600.png`. `scripts/build-gg.mjs` renders those with the
+  on-chain script + seed in headless Chrome (same HTML as the preview); the Pages workflow runs it every 15 minutes
+  and only deploys when there are new mints.

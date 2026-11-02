@@ -1,11 +1,14 @@
-// Generative Grid — rustig blok onderaan de feed: live voorbeeld, teller, prijs en minten.
-// Mainnet = deze ene regel naar 'mainnet' zetten (en het mainnet-adres hieronder invullen).
+// Generative Grid — quiet block below the feed: live preview, counter, price and minting.
+// Minting: inside the LUKSO Grid via up-provider; in a normal browser via the Universal Profile
+// extension (EIP-6963 / window.lukso, fallback window.ethereum).
+// ?gg=<number> shows that minted piece in the preview instead of a random seed.
+// Mainnet = set this one line to 'mainnet' (and fill in the mainnet address below; also in scripts/build-gg.mjs).
 const GG_NET = 'testnet';
 
 const GG_NETS = {
-  testnet: { chainId: 4201, name: 'LUKSO testnet', rpc: 'https://rpc.testnet.lukso.network',
-    address: '0x36a7bd32dC7E3dD7f44B26cf0a53b76a7c8D87b9', explorer: 'https://explorer.execution.testnet.lukso.network' },
-  mainnet: { chainId: 42, name: 'LUKSO', rpc: 'https://rpc.mainnet.lukso.network',
+  testnet: { chainId: 4201, name: 'LUKSO Testnet', symbol: 'LYXt', rpc: 'https://rpc.testnet.lukso.network',
+    address: '0xe08833AcA3F7d7424ED1493168e599859b9d6FEd', explorer: 'https://explorer.execution.testnet.lukso.network' },
+  mainnet: { chainId: 42, name: 'LUKSO', symbol: 'LYX', rpc: 'https://rpc.mainnet.lukso.network',
     address: '', explorer: 'https://explorer.execution.mainnet.lukso.network' },
 };
 
@@ -14,11 +17,14 @@ const GG_NETS = {
   const box = document.getElementById('gg');
   if (!box || !C.address) return;
 
-  const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', script: '0xebe9eb9f', mint: '0x1249c58b' };
+  const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74' };
   const MINTED_TOPIC = '0x5a3358a3d27a5373c0df2604662088d37894d56b7cfd27f315770440f4e0d919';
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
-  const st = { script: null, minted: null, max: 1000, price: null, provider: null, account: null, busy: false, msg: '' };
+  const st = { script: null, minted: null, max: 1000, price: null, provider: null, account: null, busy: false, msg: '',
+    wallet: null }; // wallet: injected browser provider (extension), only outside the Grid
+  const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
+  const hexChain = '0x' + C.chainId.toString(16);
 
   async function rpc(method, params) {
     const r = await fetch(C.rpc, { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -35,7 +41,7 @@ const GG_NETS = {
   };
   const lyx = (wei) => {
     const s = (Number(wei / 10n ** 12n) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 6 });
-    return s + ' LYX';
+    return s + ' ' + C.symbol;
   };
 
   function draw(seed) {
@@ -48,18 +54,22 @@ const GG_NETS = {
 
   function render() {
     const soldOut = st.minted !== null && st.minted >= st.max;
+    const canMint = !!st.provider && (inGrid || !!st.account);
     el('ggCount').textContent = st.minted === null ? '…' : soldOut ? `${st.max} of ${st.max} · sold out` : `#${st.minted + 1} of ${st.max}`;
-    el('ggPrice').textContent = st.price === null || soldOut || st.provider ? '' : lyx(st.price);
+    el('ggPrice').textContent = st.price === null || soldOut || canMint ? '' : lyx(st.price);
     const b = el('ggMint');
+    b.classList.toggle('gg-connect', !!st.provider && !canMint);
     if (st.provider) {
       b.hidden = false;
-      b.disabled = st.busy || soldOut || st.price === null;
-      b.textContent = st.busy ? 'Minting…' : soldOut ? 'Sold out' : st.price != null ? `Mint for ${lyx(st.price)}` : 'Mint';
+      b.disabled = st.busy || soldOut || (canMint && st.price === null);
+      b.textContent = soldOut ? 'Sold out' : !canMint ? (st.busy ? 'Connecting…' : 'Connect')
+        : st.busy ? 'Minting…' : st.price != null ? `Mint for ${lyx(st.price)}` : 'Mint';
     } else {
       b.hidden = true;
     }
-    el('ggNote').innerHTML = st.msg || (st.provider ? '' :
-      'Add this feed to your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> to mint.');
+    el('ggNote').innerHTML = st.msg || (st.provider ? (!inGrid && st.account ? short(st.account) : '') :
+      'Mint in your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> or with the ' +
+      '<a href="https://chromewebstore.google.com/detail/universal-profiles/abpickdkkbnbcoepogfhkhennhfhehfn" target="_blank" rel="noopener">Universal Profile extension</a>.');
   }
 
   async function refresh() {
@@ -83,8 +93,8 @@ const GG_NETS = {
     try {
       let [acc] = await pv.request({ method: 'eth_accounts', params: [] });
       if (!acc) [acc] = await pv.request({ method: 'eth_requestAccounts', params: [] });
-      const chain = Number(await pv.request({ method: 'eth_chainId', params: [] }));
-      if (chain !== C.chainId) { st.msg = `Switch to ${C.name} to mint.`; return; }
+      if (!acc) { st.msg = ''; return; }
+      if (!(await ensureChain(pv))) { st.msg = `Switch to ${C.name} to mint.`; return; }
       await refresh();
       const hash = await pv.request({ method: 'eth_sendTransaction',
         params: [{ from: acc, to: C.address, value: '0x' + st.price.toString(16), data: SEL.mint }] });
@@ -104,20 +114,87 @@ const GG_NETS = {
     }
   }
 
-  async function initProvider() {
-    if (!inGrid) return;
+  // Asks the wallet to switch to C.chainId (adds the network if unknown). The Grid decides the chain itself.
+  async function ensureChain(pv) {
+    const now = async () => Number(await pv.request({ method: 'eth_chainId', params: [] }));
+    if (await now() === C.chainId) return true;
+    if (inGrid) return false;
     try {
-      const { createClientUPProvider } = await import('https://esm.sh/@lukso/up-provider@0.3.5?bundle');
-      st.provider = createClientUPProvider();
+      await pv.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] });
+    } catch (e) {
+      if (e && (e.code === 4902 || e.code === -32603 || /unrecognized|not added|unknown chain/i.test(e.message || ''))) {
+        try {
+          await pv.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hexChain, chainName: C.name,
+            nativeCurrency: { name: C.symbol, symbol: C.symbol, decimals: 18 }, rpcUrls: [C.rpc], blockExplorerUrls: [C.explorer] }] });
+          if (await now() !== C.chainId) await pv.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexChain }] });
+        } catch (e2) { console.warn(e2); return false; }
+      } else { console.warn(e); return false; }
+    }
+    return (await now()) === C.chainId;
+  }
+
+  async function connect() {
+    const pv = st.provider;
+    st.busy = true; st.msg = ''; render();
+    try {
+      const [acc] = await pv.request({ method: 'eth_requestAccounts', params: [] });
+      st.account = acc || null;
+      if (acc && !(await ensureChain(pv))) st.msg = `${short(acc)} · switch to ${C.name} to mint.`;
+    } catch (e) {
+      console.warn(e);
+      st.msg = e && e.code === 4001 ? '' : 'Could not connect.';
+    } finally {
+      st.busy = false; render();
+    }
+  }
+
+  // Browser extension: EIP-6963 first (prefer the Universal Profile extension), then window.lukso / window.ethereum.
+  function findWallet() {
+    return new Promise((done) => {
+      const seen = [];
+      const on = (e) => e.detail && e.detail.provider && seen.push(e.detail);
+      window.addEventListener('eip6963:announceProvider', on);
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      setTimeout(() => {
+        window.removeEventListener('eip6963:announceProvider', on);
+        const up = seen.find((d) => /universal\s*profile|lukso|universaleverything/i.test(`${d.info?.name} ${d.info?.rdns}`));
+        done((up || seen[0])?.provider || window.lukso || window.ethereum || null);
+      }, 400);
+    });
+  }
+
+  async function initProvider() {
+    try {
+      if (inGrid) {
+        const { createClientUPProvider } = await import('https://esm.sh/@lukso/up-provider@0.3.5?bundle');
+        st.provider = createClientUPProvider();
+      } else {
+        const pv = await findWallet();
+        if (!pv) { render(); return; }
+        st.provider = pv;
+        // Already connected earlier? Then skip the Connect step (no popup).
+        const [acc] = await pv.request({ method: 'eth_accounts', params: [] }).catch(() => []);
+        st.account = acc || null;
+        pv.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
+        pv.on?.('chainChanged', () => { st.msg = ''; render(); });
+      }
       render();
-    } catch (e) { console.warn('UP provider not loaded', e); }
+    } catch (e) { console.warn('Wallet not loaded', e); }
+  }
+
+  async function previewFromUrl() {
+    const n = Number(new URLSearchParams(location.search).get('gg'));
+    if (!Number.isInteger(n) || n < 1) return null;
+    const seed = BigInt(await call(SEL.seedOf + n.toString(16).padStart(64, '0')));
+    return seed > 0n || n <= (st.minted || 0) ? seed : null;
   }
 
   el('ggNew').onclick = () => draw(Math.floor(Math.random() * 1e9));
-  el('ggMint').onclick = mint;
+  el('ggMint').onclick = () => (!inGrid && !st.account ? connect() : mint());
 
-  call(SEL.script).then((h) => { st.script = decodeString(h); draw(Math.floor(Math.random() * 1e9)); box.hidden = false; })
-    .catch((e) => console.warn('Script not loaded', e));
+  Promise.all([call(SEL.script), previewFromUrl().catch(() => null)]).then(([h, seed]) => {
+    st.script = decodeString(h); draw(seed ?? Math.floor(Math.random() * 1e9)); box.hidden = false;
+  }).catch((e) => console.warn('Script not loaded', e));
   refresh().catch(() => {});
   setInterval(() => refresh().catch(() => {}), 30000);
   initProvider();
