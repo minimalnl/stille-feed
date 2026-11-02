@@ -1,10 +1,10 @@
 // Generative Grid — rustig blok onderaan de feed: live voorbeeld, teller, prijs en minten.
 // Mainnet = deze ene regel naar 'mainnet' zetten (en het mainnet-adres hieronder invullen).
-const GG_NET = 'mainnet';
+const GG_NET = 'testnet';
 
 const GG_NETS = {
   testnet: { chainId: 4201, name: 'LUKSO testnet', rpc: 'https://rpc.testnet.lukso.network',
-    address: '0x55b0284376aC05E37Ad7eFFA4Ee0E06E665c10B6', explorer: 'https://explorer.execution.testnet.lukso.network' },
+    address: '0x36a7bd32dC7E3dD7f44B26cf0a53b76a7c8D87b9', explorer: 'https://explorer.execution.testnet.lukso.network' },
   mainnet: { chainId: 42, name: 'LUKSO', rpc: 'https://rpc.mainnet.lukso.network',
     address: '', explorer: 'https://explorer.execution.mainnet.lukso.network' },
 };
