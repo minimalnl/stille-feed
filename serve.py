@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stille feed: lokale server. Serveert de statische bestanden en een kleine
+"""Quiet Feed: local server. Serves static files and a small
 alleen-lezen proxy /hup-api/* -> https://hup.social/api/v1/* (Hup stuurt geen CORS-headers)."""
 import http.server, os, sys, urllib.request, urllib.error
 
@@ -26,5 +26,5 @@ class H(http.server.SimpleHTTPRequestHandler):
             return
         return super().do_GET()
 
-print(f'Stille feed draait op http://localhost:{PORT}')
+print(f'Quiet Feed running at http://localhost:{PORT}')
 http.server.ThreadingHTTPServer(('127.0.0.1', PORT), H).serve_forever()

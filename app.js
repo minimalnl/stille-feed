@@ -1,4 +1,4 @@
-// Stille feed — read-only, no wallet, no LYX.
+// Quiet Feed — read-only, no wallet, no LYX.
 const DEFAULT_ADDRESS = '0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1'; // @mark op Hup (LUKSO mainnet UP)
 const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
