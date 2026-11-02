@@ -90,11 +90,12 @@ async function loadPixMeta(id) {
 async function loadPixCache(address) {
   const d = await getJSON('thumbs/index.json');
   if (d.address !== address.toLowerCase()) return null;
-  return d.pieces.map((p) => ({ id: p.id, iterations: p.iterations, img: p.thumb ? 'thumbs/' + p.thumb : '', link: pixLink(p.id) }));
+  return d.pieces.map((p) => ({ id: p.id, iterations: p.iterations, img: p.thumb ? 'thumbs/' + p.thumb : '', img1x: p.thumb1x ? 'thumbs/' + p.thumb1x : '', link: pixLink(p.id) }));
 }
 function pixCard(p) {
+  const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy">`) : '<span class="pix-empty"></span>';
   return `<a class="pix" href="${esc(p.link)}" target="_blank" rel="noopener" title="View this Burnt Pix">
-    ${p.img ? `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy">` : '<span class="pix-empty"></span>'}
+    ${imgTag}
     <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>`;
 }
 async function showMorePix() {

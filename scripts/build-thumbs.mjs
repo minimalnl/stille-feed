@@ -9,7 +9,7 @@ const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
 const BURNTPIX = '0x3983151e0442906000dab83c8b1cf3f2d2535f82';
 const LSP4_METADATA = '9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e';
-const SIZE = 400, OUT = new URL('../thumbs/', import.meta.url);
+const SIZE = 800, SIZE_1X = 400, OUT = new URL('../thumbs/', import.meta.url);
 
 const rpc = async (to, data) => {
   for (let i = 0; ; i++) {
@@ -42,9 +42,15 @@ for (const id of ids) {
     const md = json.LSP4Metadata || {};
     const iterations = Number((md.attributes || []).find((a) => a.key === 'Iterations')?.value ?? 0);
     const img = (md.images || [])[0]?.[0]?.url;
-    const file = `${BigInt(id).toString(16)}.webp`;
-    if (img) await sharp(await load(img), { density: 96 }).resize(SIZE, SIZE, { fit: 'cover' }).webp({ quality: 80 }).toFile(new URL(file, OUT).pathname);
-    pieces.push({ id, iterations, thumb: img ? file : null });
+    const base = BigInt(id).toString(16);
+    const file = `${base}.webp`;
+    const file1x = `${base}-1x.webp`;
+    if (img) {
+      const buf = await load(img);
+      await sharp(buf, { density: 96 }).resize(SIZE, SIZE, { fit: 'cover' }).webp({ quality: 80 }).toFile(new URL(file, OUT).pathname);
+      await sharp(buf, { density: 96 }).resize(SIZE_1X, SIZE_1X, { fit: 'cover' }).webp({ quality: 80 }).toFile(new URL(file1x, OUT).pathname);
+    }
+    pieces.push({ id, iterations, thumb: img ? file : null, thumb1x: img ? file1x : null });
     process.stdout.write('.');
   } catch (e) { console.warn(`\n${id}: ${e.message}`); }
 }
