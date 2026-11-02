@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,14 +13,14 @@
     <img class="mark" src="sun.svg" alt="" width="44" height="44">
     <div>
       <h1>Stille feed</h1>
-      <p class="sub">Moments en posts van één Universal Profile, rustig op een rij.</p>
+      <p class="sub">Moments and posts from one Universal Profile, calmly in a row.</p>
     </div>
   </header>
 
   <form id="form" class="search" autocomplete="off">
-    <label for="addr" class="sr">Adres van een Universal Profile</label>
-    <input id="addr" name="address" placeholder="0x… adres van een Universal Profile" spellcheck="false">
-    <button type="submit">Bekijk</button>
+    <label for="addr" class="sr">Universal Profile address</label>
+    <input id="addr" name="address" placeholder="0x… Universal Profile address" spellcheck="false">
+    <button type="submit">View</button>
   </form>
   <p id="formError" class="hint" hidden></p>
 
@@ -33,7 +33,7 @@
   </section>
 
   <nav class="filters" id="filters" hidden>
-    <button data-f="all" class="on">Alles</button>
+    <button data-f="all" class="on">All</button>
     <button data-f="moment">Moments</button>
     <button data-f="hup">Hup</button>
   </nav>
@@ -41,11 +41,25 @@
   <section id="feed" class="feed" aria-live="polite"></section>
   <p id="status" class="status"></p>
 
+  <aside id="gg" class="gg" hidden aria-label="Generative Grid">
+    <div class="gg-art"><iframe id="ggArt" sandbox="allow-scripts" title="Generative Grid, live preview" loading="lazy"></iframe>
+      <button id="ggNew" class="gg-new" title="New preview" aria-label="New preview">↻</button></div>
+    <div class="gg-info">
+      <span class="gg-label">From the maker</span>
+      <h2>Generative Grid</h2>
+      <p class="gg-sub">One square, every mint its own seed. Script and seed live on&#8209;chain.</p>
+      <div class="gg-row"><span id="ggCount">…</span><span id="ggPrice"></span></div>
+      <button id="ggMint" class="gg-mint" hidden>Mint</button>
+      <p id="ggNote" class="gg-note"></p>
+    </div>
+  </aside>
+
   <footer class="foot">
-    <span>Alleen lezen. Geen wallet, geen LYX.</span>
-    <span>Bronnen: LUKSO mainnet · Forever Moments · Hup</span>
+    <span>The feed is read-only.</span>
+    <span>Sources: LUKSO mainnet · Forever Moments · Hup</span>
   </footer>
 </main>
 <script src="app.js"></script>
+<script src="grid-ad.js"></script>
 </body>
 </html>

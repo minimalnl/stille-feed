@@ -1,4 +1,4 @@
-// Stille feed — alleen lezen, geen wallet, geen LYX.
+// Stille feed — read-only, no wallet, no LYX.
 const DEFAULT_ADDRESS = '0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1'; // @mark op Hup (LUKSO mainnet UP)
 const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
@@ -19,7 +19,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
 const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
-const fmtDate = (ms) => new Date(ms).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
+const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 async function getJSON(url, opts) {
   const r = await fetch(url, opts);
@@ -56,9 +56,9 @@ async function loadLSP3(address) {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: address, data: '0x54f6127f' + LSP3_KEY.slice(2) }, 'latest'] }),
   });
-  if (res.error || !res.result || res.result === '0x') throw new Error('Geen Universal Profile');
+  if (res.error || !res.result || res.result === '0x') throw new Error('No Universal Profile');
   const url = decodeUrlFromValue(res.result);
-  if (!url) throw new Error('Geen LSP3-profiel');
+  if (!url) throw new Error('No LSP3 profile');
   const json = url.startsWith('data:') ? await (await fetch(url)).json() : await getJSON(ipfs(url));
   const p = json.LSP3Profile || json;
   const imgs = [...(p.profileImage || [])].sort((a, b) => (a.width || 0) - (b.width || 0));
@@ -72,45 +72,63 @@ async function loadPixIds(address) {
   const n = parseInt(r.slice(64, 128), 16) || 0;
   return [...Array(n)].map((_, i) => '0x' + r.slice(128 + i * 64, 192 + i * 64));
 }
+const pixLink = (id) => `https://universaleverything.io/asset/${BURNTPIX}/tokenId/${id}`;
+// Each tokenId is the address of its fractal contract; iterations() there is a 32-byte answer,
+// so we can sort without downloading every piece's ~0.5 MB on-chain SVG.
+async function loadPixIterations(id) {
+  return Number(BigInt(await rpcCall('0x' + id.slice(-40), '0x4358d2be')));
+}
 async function loadPixMeta(id) {
   const url = decodeUrlFromValue(await rpcCall(BURNTPIX, '0x16e023b3' + id.slice(2) + LSP4_METADATA));
   const json = url.startsWith('data:') ? JSON.parse(url.slice(url.indexOf(',') + 1)) : await getJSON(ipfs(url));
   const md = json.LSP4Metadata || {};
   const img = (md.images || [])[0]?.[0]?.url || '';
   const it = (md.attributes || []).find((a) => a.key === 'Iterations')?.value;
-  return { id, img, iterations: it, link: `https://universaleverything.io/asset/${BURNTPIX}/tokenId/${id}` };
+  return { id, img, iterations: it, link: pixLink(id) };
+}
+// Cached thumbnails built by scripts/build-thumbs.mjs (GitHub Action) for the default profile.
+async function loadPixCache(address) {
+  const d = await getJSON('thumbs/index.json');
+  if (d.address !== address.toLowerCase()) return null;
+  return d.pieces.map((p) => ({ id: p.id, iterations: p.iterations, img: p.thumb ? 'thumbs/' + p.thumb : '', link: pixLink(p.id) }));
 }
 function pixCard(p) {
-  return `<a class="pix" href="${esc(p.link)}" target="_blank" rel="noopener" title="Bekijk deze Burnt Pix">
+  return `<a class="pix" href="${esc(p.link)}" target="_blank" rel="noopener" title="View this Burnt Pix">
     ${p.img ? `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy">` : '<span class="pix-empty"></span>'}
-    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('nl-NL') + ' iteraties' : 'Burnt Pix'}</span></a>`;
+    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>`;
 }
 async function showMorePix() {
   const gen = pix.gen;
   const next = pix.pieces.slice(pix.shown, pix.shown + PIX_PAGE);
   pix.shown += next.length;
-  const btn = $('#pixMore'); if (btn) btn.textContent = 'Even geduld…';
+  const btn = $('#pixMore'); if (btn) btn.textContent = 'One moment…';
+  await Promise.all(next.map(async (p) => { if (p.img == null) Object.assign(p, await loadPixMeta(p.id).catch(() => ({ img: '' }))); }));
+  if (gen !== pix.gen) return;
   const grid = $('#pixGrid');
   next.forEach((p) => { grid.insertAdjacentHTML('beforeend', pixCard(p)); });
-  if (gen !== pix.gen) return;
   const rest = pix.pieces.length - pix.shown;
-  $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Meer tonen (${rest})</button>` : '';
+  $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Show more (${rest})</button>` : '';
   if (rest > 0) $('#pixMore').onclick = showMorePix;
 }
 async function showPix(address) {
   pix.gen++; pix.pieces = []; pix.shown = 0;
-  const sec = $('#pixSection'); sec.hidden = true;
-  let ids = [];
-  try { ids = await loadPixIds(address); } catch { return; }
-  if (!ids.length || address !== state.address) return;
-  sec.hidden = false;
-  $('#pixCount').textContent = ids.length === 1 ? '1 stuk' : `${ids.length} stukken`;
-  $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = 'Iteraties laden…';
   const gen = pix.gen;
-  const pieces = await Promise.all(ids.map((id) => loadPixMeta(id).catch(() => null)));
-  if (gen !== pix.gen || address !== state.address) return;
-  pix.pieces = pieces.filter((p) => p).sort((a, b) => (b.iterations || 0) - (a.iterations || 0));
-  $('#pixFoot').innerHTML = '';
+  const sec = $('#pixSection'); sec.hidden = true;
+  let pieces = await loadPixCache(address).catch(() => null);
+  if (!pieces) {
+    let ids = [];
+    try { ids = await loadPixIds(address); } catch { return; }
+    if (!ids.length || address !== state.address) return;
+    sec.hidden = false;
+    $('#pixCount').textContent = ids.length === 1 ? '1 piece' : `${ids.length} pieces`;
+    $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = 'Loading iterations…';
+    pieces = await Promise.all(ids.map(async (id) => ({ id, img: null, link: pixLink(id), iterations: await loadPixIterations(id).catch(() => 0) })));
+  }
+  if (gen !== pix.gen || address !== state.address || !pieces.length) return;
+  sec.hidden = false;
+  $('#pixCount').textContent = pieces.length === 1 ? '1 piece' : `${pieces.length} pieces`;
+  pix.pieces = pieces.sort((a, b) => (b.iterations || 0) - (a.iterations || 0));
+  $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = '';
   await showMorePix();
 }
 
@@ -209,8 +227,8 @@ async function loadHup(address, page) {
 // ---------- Render ----------
 function renderProfile(p, address) {
   $('#profile').innerHTML = `
-    ${p.image ? `<img class="avatar" src="${esc(p.image)}" alt="Profielfoto van ${esc(p.name)}">` : `<img class="avatar" src="sun.svg" alt="">`}
-    <h2>${esc(p.name || 'Naamloos profiel')}</h2>
+    ${p.image ? `<img class="avatar" src="${esc(p.image)}" alt="Profile picture of ${esc(p.name)}">` : `<img class="avatar" src="sun.svg" alt="">`}
+    <h2>${esc(p.name || 'Unnamed profile')}</h2>
     <div class="addr" title="${esc(address)}">${esc(short(address))}</div>
     ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
     ${p.tags.length ? `<div class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}`;
@@ -222,8 +240,8 @@ function mediaHTML(imgs) {
 }
 function renderFeed() {
   const list = state.items.filter((i) => state.filter === 'all' || i.kind === state.filter).sort((a, b) => b.t - a.t);
-  const hupNote = state.hupBlocked && state.filter !== 'moment' ? `<p class="note">Hup-posts kan deze pagina niet rechtstreeks ophalen.
-    <a href="https://hup.social/${esc(state.address)}" target="_blank" rel="noopener">Bekijk de posts op Hup ↗</a></p>` : '';
+  const hupNote = state.hupBlocked && state.filter !== 'moment' ? `<p class="note">This page can't load Hup posts directly.
+    <a href="https://hup.social/${esc(state.address)}" target="_blank" rel="noopener">View the posts on Hup ↗</a></p>` : '';
   $('#feed').innerHTML = hupNote + (list.length ? list.map((i) => `
     <article class="item">
       ${mediaHTML(i.images)}
@@ -232,28 +250,28 @@ function renderFeed() {
           <span class="kind ${i.kind}"><span class="dot"></span>${i.kind === 'moment' ? 'Moment' : 'Hup'}</span>
           <span>${fmtDate(i.t)}</span>
           ${i.collection ? `<span>· ${esc(i.collection)}</span>` : ''}
-          <a class="open" href="${esc(i.link)}" target="_blank" rel="noopener">Bekijk ↗</a>
+          <a class="open" href="${esc(i.link)}" target="_blank" rel="noopener">View ↗</a>
         </div>
         ${i.title ? `<h3>${esc(i.title)}</h3>` : ''}
         ${i.kind === 'moment' ? (i.text ? `<p class="text clamp">${esc(i.text)}</p>` : '') : `<p class="text">${i.html}</p>`}
       </div>
-    </article>`).join('') : (hupNote ? '' : `<p class="empty">Hier is het nog stil.</p>`));
+    </article>`).join('') : (hupNote ? '' : `<p class="empty">Nothing here yet.</p>`));
   const more = state.fmMore || state.hupMore;
   $('#status').innerHTML = (state.notes.length ? esc(state.notes.join(' ')) + ' ' : '') +
-    (more ? `<button class="more" id="more">Meer laden</button>` : '');
+    (more ? `<button class="more" id="more">Load more</button>` : '');
   if (more) $('#more').onclick = loadMore;
 }
 
 async function fetchBatch() {
   const jobs = [];
   if (state.fmOffset === 0 || state.fmMore) jobs.push(loadMoments(state.address, state.fmOffset).then((r) => { state.fmOffset += PAGE; state.fmMore = r.more; return r.items; })
-    .catch(() => { state.fmMore = false; state.notes.push('Forever Moments is nu niet bereikbaar.'); return []; }));
+    .catch(() => { state.fmMore = false; state.notes.push('Forever Moments is unreachable right now.'); return []; }));
   if (state.hupPage === 1 || state.hupMore) jobs.push(loadHup(state.address, state.hupPage).then((r) => { state.hupPage += 1; state.hupMore = r.more; return r.items; })
     .catch((e) => { state.hupMore = false; if (state.hupPage === 1) state.hupBlocked = true; return []; }));
   const res = await Promise.all(jobs);
   state.items.push(...res.flat());
 }
-async function loadMore() { $('#status').textContent = 'Even geduld…'; state.notes = []; await fetchBatch(); renderFeed(); }
+async function loadMore() { $('#status').textContent = 'One moment…'; state.notes = []; await fetchBatch(); renderFeed(); }
 
 async function show(address) {
   Object.assign(state, { address, hupBlocked: false, items: [], fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] });
@@ -264,8 +282,8 @@ async function show(address) {
   $('#feed').innerHTML = `<div class="skeleton"></div><div class="skeleton"></div>`;
   $('#status').textContent = '';
   const profile = loadLSP3(address).then((p) => renderProfile(p, address)).catch(() => {
-    $('#profile').innerHTML = `<img class="avatar" src="sun.svg" alt=""><h2>Onbekend profiel</h2><div class="addr">${esc(short(address))}</div>
-      <p class="desc">Op dit adres vond ik geen LSP3-profiel op het LUKSO mainnet.</p>`;
+    $('#profile').innerHTML = `<img class="avatar" src="sun.svg" alt=""><h2>Unknown profile</h2><div class="addr">${esc(short(address))}</div>
+      <p class="desc">No LSP3 profile found at this address on LUKSO mainnet.</p>`;
   });
   showPix(address);
   await Promise.all([profile, fetchBatch()]);
@@ -276,7 +294,7 @@ async function show(address) {
 $('#form').addEventListener('submit', (e) => {
   e.preventDefault();
   const a = $('#addr').value.trim();
-  if (!isAddr(a)) { $('#formError').textContent = 'Dat lijkt geen geldig adres. Een adres begint met 0x en heeft 40 tekens daarna.'; $('#formError').hidden = false; return; }
+  if (!isAddr(a)) { $('#formError').textContent = 'That doesn\'t look like a valid address. It starts with 0x followed by 40 characters.'; $('#formError').hidden = false; return; }
   history.replaceState(null, '', '?address=' + a);
   show(a.toLowerCase());
 });

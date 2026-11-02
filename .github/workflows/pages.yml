@@ -4,11 +4,17 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '17 4 * * *' # daily: refresh Burnt Pix thumbnails (iterations change over time)
   workflow_dispatch:
 
 permissions:
   pages: write
   id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -16,6 +22,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Burnt Pix thumbnails
+        # If this fails the site still deploys; app.js then falls back to live on-chain loading.
+        continue-on-error: true
+        run: |
+          npm install --no-save --no-package-lock sharp@0.33.5
+          node scripts/build-thumbs.mjs
+          rm -rf node_modules
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
