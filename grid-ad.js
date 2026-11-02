@@ -7,7 +7,7 @@ const GG_NET = 'testnet';
 
 const GG_NETS = {
   testnet: { chainId: 4201, name: 'LUKSO Testnet', symbol: 'LYXt', rpc: 'https://rpc.testnet.lukso.network',
-    address: '0xe08833AcA3F7d7424ED1493168e599859b9d6FEd', explorer: 'https://explorer.execution.testnet.lukso.network' },
+    address: '0xF4947C5F85115D9FA6c039Ac459C630370F8F239', explorer: 'https://explorer.execution.testnet.lukso.network' },
   mainnet: { chainId: 42, name: 'LUKSO', symbol: 'LYX', rpc: 'https://rpc.mainnet.lukso.network',
     address: '', explorer: 'https://explorer.execution.mainnet.lukso.network' },
 };
@@ -40,7 +40,7 @@ const GG_NETS = {
     return new TextDecoder().decode(b);
   };
   const lyx = (wei) => {
-    const s = (Number(wei / 10n ** 12n) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 6 });
+    const s = (Number(wei / 10n ** 9n) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 9 });
     return s + ' ' + C.symbol;
   };
 
