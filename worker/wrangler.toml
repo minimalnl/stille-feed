@@ -1,0 +1,9 @@
+# Cloudflare Worker for Quiet Feed's Hup posts. See README.md in this folder.
+name = "quiet-feed-hup"
+main = "hup-proxy.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Pages allowed to read through this proxy (comma separated, or "*").
+# Inside the LUKSO Grid the feed still runs on minimalnl.github.io (it is an iframe), so this is enough.
+ALLOWED_ORIGINS = "https://minimalnl.github.io,http://localhost:8080,http://127.0.0.1:8080"
