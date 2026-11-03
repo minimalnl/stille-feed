@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quiet Feed</title>
 <link rel="icon" href="sun.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://rpc.mainnet.lukso.network" crossorigin>
+<link rel="preconnect" href="https://api.universalprofile.cloud">
+<link rel="dns-prefetch" href="https://www.forevermoments.life">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -45,11 +48,16 @@
     <div class="gg-art"><iframe id="ggArt" sandbox="allow-scripts" title="Generative Grid, live preview" loading="lazy"></iframe>
       <button id="ggNew" class="gg-new" title="New preview" aria-label="New preview">↻</button></div>
     <div class="gg-info">
-      <span class="gg-label">From the maker</span>
+      <span class="gg-label">Tip the creator</span>
       <h2>Generative Grid</h2>
       <p class="gg-sub">One square, every mint its own seed. Script and seed live on&#8209;chain.</p>
       <div class="gg-row"><span id="ggCount">…</span><span id="ggPrice"></span></div>
-      <button id="ggMint" class="gg-mint" hidden>Mint</button>
+      <div class="gg-act">
+        <div id="ggQty" class="gg-qty" role="group" aria-label="How many to mint" hidden>
+          <button type="button" data-q="1">1</button><button type="button" data-q="2">2</button><button type="button" data-q="3">3</button><button type="button" data-q="4">4</button><button type="button" data-q="5">5</button>
+        </div>
+        <button id="ggMint" class="gg-mint" type="button" hidden>Mint</button>
+      </div>
       <p id="ggNote" class="gg-note"></p>
     </div>
   </aside>
@@ -59,7 +67,7 @@
     <span>Sources: LUKSO mainnet · Forever Moments · Hup</span>
   </footer>
 </main>
-<script src="app.js"></script>
-<script src="grid-ad.js"></script>
+<script src="app.js" defer></script>
+<script src="grid-ad.js" defer></script>
 </body>
 </html>
