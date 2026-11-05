@@ -101,6 +101,12 @@ h1{font-weight:400;font-size:28px;letter-spacing:.01em;margin:0}
 .gg-mint:disabled{background:var(--line);color:var(--muted);cursor:default}
 .gg-mint.gg-connect{background:transparent;color:var(--sage-d);box-shadow:inset 0 0 0 1px var(--line)}
 .gg-mint.gg-connect:hover{background:var(--bg)}
+.gg-pick{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.gg-pick-t{font-size:12px;color:var(--muted);margin-right:2px}
+.gg-pick-w{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--sage-d);border-radius:999px;padding:7px 14px;font:inherit;font-size:13px;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line)}
+.gg-pick-w img{width:16px;height:16px;border-radius:4px}
+.gg-pick-w:hover,.gg-pick-w.on{background:var(--bg)}
+.gg-pick-x,.gg-switch{border:0;background:none;padding:0;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .gg-note{margin:8px 0 0;font-size:12px;color:var(--muted);min-height:1em}
 .gg-note:empty{display:none}
 .gg-note a{color:var(--sage-d)}
