@@ -25,8 +25,9 @@ const GG_NETS = {
 
   const MAX_QTY = 5;
   const TIER_SIZE = 100; // contract: price doubles every 100 (priceFor = BASE_PRICE << (n-1)/100)
+  const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1'; // contract owner (Mark)
   const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', base: '0xf86325ed', priceFor: '0x8d5555f2',
-    script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74' };
+    script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74', withdraw: '0x51cff8d9' };
   const ERR = { '0x52df9fe5': 'sold out', '0x6871963e': 'price changed' }; // SoldOut(), WrongPrice(uint256,uint256)
   const MINTED_TOPIC = '0x5a3358a3d27a5373c0df2604662088d37894d56b7cfd27f315770440f4e0d919';
   const P5 = 'https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js';
@@ -34,7 +35,7 @@ const GG_NETS = {
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
   const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null, wallets: [], wallet: null,
-    busy: false, msg: '', progress: '', useUpProvider: false };
+    busy: false, msg: '', progress: '', useUpProvider: false, contractBalance: null, claimBusy: false, claimMsg: '' };
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
   const hexChain = '0x' + C.chainId.toString(16);
@@ -116,6 +117,18 @@ const GG_NETS = {
       : st.account ? short(st.account) + walletSwitch : '') :
       'Mint in your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> or with the ' +
       '<a href="https://chromewebstore.google.com/detail/universal-profiles/abpickdkkbnbcoepogfhkhennhfhehfn" target="_blank" rel="noopener">Universal Profile extension</a>.');
+    
+    // Claim revenue button (owner only)
+    const isOwner = st.account && st.account.toLowerCase() === OWNER.toLowerCase();
+    const claimBtn = el('ggClaim');
+    const claimNote = el('ggClaimNote');
+    if (claimBtn && claimNote) {
+      const hasBalance = st.contractBalance && st.contractBalance > 0n;
+      claimBtn.hidden = !canMint || !isOwner;
+      claimBtn.disabled = st.claimBusy || !hasBalance;
+      claimBtn.textContent = st.claimBusy ? 'Claiming…' : hasBalance ? `Claim ${lyx(st.contractBalance)}` : 'No revenue yet';
+      claimNote.innerHTML = st.claimMsg || (isOwner && hasBalance ? 'Sends 0 LYX, calls withdraw(owner)' : '');
+    }
   }
 
   // Counter + prices of the next MAX_QTY numbers, in one request.
@@ -123,6 +136,11 @@ const GG_NETS = {
     const [m, x, base, cur] = (await rpcBatch([SEL.minted, SEL.max, SEL.base, SEL.price]
       .map((d) => ['eth_call', [{ to: C.address, data: d }, 'latest']]))).map((h) => BigInt(h));
     st.minted = Number(m); st.max = Number(x); st.base = base;
+    // Also fetch contract balance for claim button
+    try {
+      const bal = await rpc('eth_getBalance', [C.address, 'latest']);
+      st.contractBalance = BigInt(bal);
+    } catch (e) { st.contractBalance = null; }
     // Sanity check against the contract's own price; if the formula ever disagrees, ask the contract per number.
     if (left() > 0 && priceFor(st.minted + 1) !== cur) {
       const nums = [...Array(Math.min(MAX_QTY, left()))].map((_, i) => st.minted + 1 + i);
@@ -243,6 +261,52 @@ const GG_NETS = {
       } else { console.warn(e); return false; }
     }
     return (await now()) === C.chainId;
+  }
+
+  // Claim mint revenue (owner only): calls withdraw(address) with 0 LYX value
+  async function claimRevenue() {
+    if (st.claimBusy) return;
+    const pv = st.provider;
+    const acc = st.account;
+    if (!acc) { st.claimMsg = 'Connect to claim revenue.'; render(); return; }
+    if (acc.toLowerCase() !== OWNER.toLowerCase()) { 
+      st.claimMsg = 'Only the contract owner can claim revenue.'; 
+      render(); 
+      return; 
+    }
+    st.claimBusy = true; st.claimMsg = ''; render();
+    try {
+      if (!(await ensureChain(pv))) { st.claimMsg = `Switch to ${C.name} to claim.`; return; }
+      // withdraw(address payable to) calldata: selector + padded owner address
+      const data = SEL.withdraw + OWNER.slice(2).padStart(64, '0');
+      const tx = { from: acc, to: C.address, value: '0x0', data };
+      // Dry run first
+      try { await rpc('eth_call', [tx, 'latest']); } catch (e) {
+        st.claimMsg = 'Claim failed: ' + (e?.message || 'contract reverted');
+        return;
+      }
+      let hash;
+      try { hash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); } catch (e) {
+        st.claimMsg = e?.code === 4001 ? 'Cancelled.' : 'Could not send transaction.';
+        return;
+      }
+      st.claimMsg = 'Claiming…';
+      render();
+      const rc = await waitReceipt(hash);
+      if (!rc) { st.claimMsg = `Pending · <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`; return; }
+      if (rc.status === '0x1') {
+        st.claimMsg = `Claimed! <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`;
+        await refresh().catch(() => {}); // refresh balance
+      } else {
+        st.claimMsg = `Claim failed · <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`;
+      }
+    } catch (e) {
+      console.warn(e);
+      st.claimMsg = 'Claim failed.';
+    } finally {
+      st.claimBusy = false;
+      render();
+    }
   }
 
   async function connect(picked) {
@@ -387,6 +451,8 @@ const GG_NETS = {
     if (!n || st.busy || n > left()) return;
     st.qty = n; st.msg = ''; render();
   };
+  const claimBtn = el('ggClaim');
+  if (claimBtn) claimBtn.onclick = () => claimRevenue();
 
   // Nothing of this block loads (no RPC, no p5) until the visitor scrolls near the bottom.
   let started = false;
