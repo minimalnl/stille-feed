@@ -10,7 +10,7 @@ import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 // Keep in sync with GG_NETS in grid-ad.js (only nets whose contract builds metadata, i.e. v3+).
 const NETS = [
   { chainId: 4201, rpc: 'https://rpc.testnet.lukso.network', address: '0xF4947C5F85115D9FA6c039Ac459C630370F8F239' }, // v4 (LSP18 royalties); v3 was 0xe08833AcA3F7d7424ED1493168e599859b9d6FEd
-  // { chainId: 42, rpc: 'https://rpc.mainnet.lukso.network', address: '' },
+  { chainId: 42, rpc: 'https://rpc.mainnet.lukso.network', address: '0x33Dd4D3da812e2cc1B3692456470DFDD99659e62' },
 ];
 const P5 = 'https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js';
 const SEL = { minted: '0x4f02c420', script: '0xebe9eb9f', seedOf: '0x82829f74' };

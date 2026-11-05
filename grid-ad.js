@@ -8,15 +8,14 @@
 // before the next. Anything unexpected (price changed, sold out, not enough LYX, rejected) stops the run;
 // a failed mint reverts and costs only gas.
 //
-// Mainnet = set this one line to 'mainnet' (and fill in the mainnet address below; also in scripts/build-gg.mjs).
-// Only after Mark tested on testnet and said yes.
-const GG_NET = 'testnet';
+// Mainnet by default; testnet still available via ?ggnet=testnet.
+const GG_NET = new URLSearchParams(location.search).get('ggnet') === 'testnet' ? 'testnet' : 'mainnet';
 
 const GG_NETS = {
   testnet: { chainId: 4201, name: 'LUKSO Testnet', symbol: 'LYXt', rpc: 'https://rpc.testnet.lukso.network',
     address: '0xF4947C5F85115D9FA6c039Ac459C630370F8F239', explorer: 'https://explorer.execution.testnet.lukso.network' },
   mainnet: { chainId: 42, name: 'LUKSO', symbol: 'LYX', rpc: 'https://rpc.mainnet.lukso.network',
-    address: '', explorer: 'https://explorer.execution.mainnet.lukso.network' },
+    address: '0x33Dd4D3da812e2cc1B3692456470DFDD99659e62', explorer: 'https://explorer.execution.mainnet.lukso.network' },
 };
 
 (() => {
