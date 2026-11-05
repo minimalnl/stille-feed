@@ -34,7 +34,7 @@ const GG_NETS = {
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
   const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null, wallets: [], wallet: null,
-    busy: false, msg: '', progress: '' };
+    busy: false, msg: '', progress: '', useUpProvider: false };
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
   const hexChain = '0x' + C.chainId.toString(16);
@@ -111,8 +111,9 @@ const GG_NETS = {
     } else {
       b.hidden = true;
     }
+    const walletSwitch = st.wallets.length > 1 && !st.useUpProvider ? ` · ${esc(st.wallet?.info.name || '')} · <button type="button" class="gg-switch" id="ggSwitch">change</button>` : '';
     el('ggNote').innerHTML = st.msg || (st.provider ? (canMint && q > 1 && !st.busy ? `${q} pieces = ${q} confirmations, one after the other.`
-      : st.account ? short(st.account) + (!inGrid && st.wallets.length > 1 ? ` · ${esc(st.wallet?.info.name || '')} · <button type="button" class="gg-switch" id="ggSwitch">change</button>` : '') : '') :
+      : st.account ? short(st.account) + walletSwitch : '') :
       'Mint in your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> or with the ' +
       '<a href="https://chromewebstore.google.com/detail/universal-profiles/abpickdkkbnbcoepogfhkhennhfhehfn" target="_blank" rel="noopener">Universal Profile extension</a>.');
   }
@@ -165,16 +166,16 @@ const GG_NETS = {
     try {
       // In the Grid the chain is fixed by the Grid: check it before asking anyone to connect.
       if (inGrid && !(await ensureChain(pv))) { st.msg = `Minting is on ${C.name} for now; this Grid is on another network.`; return; }
-      let acc;
-      if (inGrid) {
-        // Grid: visitor account comes from eth_accounts (set when visitor connects via UE). Never force eth_requestAccounts.
-        [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
-        if (!acc) { st.msg = 'Connect to this mini-app in your Grid to mint.'; return; }
-      } else {
-        // Standalone: visitor connects via wallet picker and eth_requestAccounts
-        [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
-        if (!acc) [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
-        if (!acc) { st.msg = 'Connect a profile to mint.'; return; }
+      let [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
+      if (!acc) {
+        // No account yet: try eth_requestAccounts once (user-initiated call is OK)
+        [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
+        if (!acc) { 
+          st.msg = inGrid && st.useUpProvider 
+            ? 'Allow this mini-app in Universal Everything, then try Connect again.' 
+            : 'Connect a profile to mint.'; 
+          return; 
+        }
       }
       if (!inGrid && !(await ensureChain(pv))) { st.msg = `Switch to ${C.name} to mint.`; return; }
       await refresh();
@@ -246,18 +247,18 @@ const GG_NETS = {
 
   async function connect(picked) {
     if (st.busy) return;
-    if (!picked && st.wallets.length > 1) { st.msg = ''; render(); showPicker(); return; }
+    if (!picked && st.wallets.length > 1 && !st.useUpProvider) { st.msg = ''; render(); showPicker(); return; }
     const pv = st.provider;
     st.busy = true; st.msg = ''; render();
     try {
-      if (inGrid) {
-        // Grid: refresh visitor account from eth_accounts (visitor connects via UE, not via eth_requestAccounts popup)
-        const [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
+      if (inGrid && st.useUpProvider) {
+        // Mobile UE app (no extension): use up-provider eth_requestAccounts to trigger parent mini-app connect
+        const [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
         st.account = acc || null;
-        if (!acc) st.msg = 'Connect to this mini-app in your Grid to mint.';
+        if (!acc) st.msg = 'Allow this mini-app in Universal Everything, then try Connect again.';
         else if (!(await ensureChain(pv))) st.msg = `${short(acc)} · Grid is on another network.`;
       } else {
-        // Standalone: visitor connects via wallet picker and eth_requestAccounts
+        // Desktop browser (extension available) or standalone: use eth_requestAccounts on extension
         const [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
         st.account = acc || null;
         if (acc && !(await ensureChain(pv))) st.msg = `${short(acc)} · switch to ${C.name} to mint.`;
@@ -323,17 +324,33 @@ const GG_NETS = {
   async function initProvider() {
     try {
       if (inGrid) {
-        st.provider = await (window.qfUP || Promise.resolve(null));
-        if (st.provider) {
-          // Grid: visitor account comes from accounts/eth_accounts (set when visitor connects to mini-app via UE)
-          // Try multiple properties: accounts, allowedAccounts, or call eth_accounts
-          const initial = st.provider.accounts || st.provider.allowedAccounts || 
-            (await st.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []));
-          st.account = (initial && initial[0]) || null;
-          st.provider.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
-          st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
+        // In Grid: prefer browser extension (desktop) over up-provider (mobile UE app only)
+        // Try to find UP extension first
+        st.wallets = await findWallets();
+        const upWallet = st.wallets.find(isUP);
+        
+        if (upWallet) {
+          // Desktop browser with UP extension: use extension even in Grid iframe
+          st.useUpProvider = false;
+          useWallet(upWallet);
+          // Check if already connected
+          const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
+          st.account = acc || null;
+        } else {
+          // Mobile UE app (no extension): use up-provider for mini-app connect flow
+          st.useUpProvider = true;
+          st.provider = await (window.qfUP || Promise.resolve(null));
+          if (st.provider) {
+            // Don't call eth_requestAccounts on load; wait for user click on Connect
+            const initial = st.provider.accounts || st.provider.allowedAccounts || 
+              (await st.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []));
+            st.account = (initial && initial[0]) || null;
+            st.provider.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
+            st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
+          }
         }
       } else {
+        // Standalone: find wallets and use preferred
         st.wallets = await findWallets();
         const w = preferred();
         if (!w) { render(); return; }
@@ -358,7 +375,7 @@ const GG_NETS = {
 
   el('ggNote').onclick = (e) => { if (e.target.id === 'ggSwitch' && !st.busy) showPicker(); };
   el('ggNew').onclick = () => draw(randomSeed());
-  el('ggMint').onclick = () => (!inGrid && !st.account ? connect() : mint());
+  el('ggMint').onclick = () => (!st.account ? connect() : mint());
   el('ggQty').onclick = (e) => {
     const n = Number(e.target.dataset?.q);
     if (!n || st.busy || n > left()) return;
