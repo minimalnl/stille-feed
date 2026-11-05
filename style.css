@@ -23,7 +23,16 @@ h1{font-weight:400;font-size:28px;letter-spacing:.01em;margin:0}
 .avatar{width:112px;height:112px;border-radius:50%;object-fit:cover;background:var(--sand);display:block;margin:0 auto 18px;
   box-shadow:0 0 0 6px var(--card),0 0 0 7px var(--line)}
 .profile h2{font-weight:400;font-size:24px;margin:0}
-.profile .addr{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);margin-top:4px}
+.idrow{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:4px}
+.profile .addr{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);background:none;border:0;padding:2px 6px;border-radius:999px;cursor:copy;min-width:9.5em;transition:color .3s,background .3s}
+.profile .addr:hover{background:var(--sand)}
+.profile .addr.done{color:var(--sage-d)}
+.profile .ue{font-size:12px;color:var(--sage-d);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:2px 12px}
+.profile .ue:hover{border-color:var(--sage);background:var(--card)}
+.chrome[hidden]{display:none}
+.chrome-toggle{display:block;margin:12px 0 0 auto;border:0;background:none;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;opacity:.55;padding:4px 8px;border-radius:999px}
+.chrome-toggle:hover{opacity:1;background:var(--sand)}
+body.chrome-off .chrome-toggle{margin-top:-40px}
 .profile .desc{max-width:520px;margin:14px auto 0;color:#6b6e63;font-size:15px}
 .profile-links a{color:var(--sage-d);text-decoration:none}
 .profile-links a:hover{text-decoration:underline}
