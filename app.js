@@ -1,4 +1,4 @@
-// Quiet Feed: read-only feed of one Universal Profile (the Generative Grid block in grid-ad.js is the only wallet part).
+// stille feed: read-only feed of one Universal Profile (the Generative Grid block in grid-ad.js is the only wallet part).
 const DEFAULT_ADDRESS = '0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1'; // @mark op Hup (LUKSO mainnet UP)
 const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
@@ -333,7 +333,7 @@ function renderProfile(p, address) {
     <h2>${esc(p.name || 'Unnamed profile')}</h2>
     <div class="idrow">
       <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
-      <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener">profile</a>
+      <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener" title="Open on Universal Everything">profile ↗</a>
     </div>
     ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
     ${p.tags.length ? `<div class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}`;
@@ -429,7 +429,7 @@ function show(address) {
       <h2>${isContract ? 'Universal Profile' : 'Unknown address'}</h2>
       <div class="idrow">
       <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
-      <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener">profile</a>
+      <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener" title="Open on Universal Everything">profile ↗</a>
     </div>
       <p class="desc">${isContract
         ? 'Profile metadata could not be loaded — the on-chain IPFS file may be missing. Burnt Pix, Moments, and Hup below still show when they exist.'
