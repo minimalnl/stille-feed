@@ -23,13 +23,27 @@ const GG_NETS = {
   const box = document.getElementById('gg');
   if (!box || !C.address) return;
 
+  // Lightweight keccak256 implementation (will load from CDN)
+  let keccak256 = null;
+  (async () => {
+    try {
+      const { keccak_256 } = await import('https://esm.sh/@noble/hashes@1.3.3/sha3');
+      keccak256 = (data) => {
+        const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+        return '0x' + Array.from(keccak_256(bytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+      };
+    } catch (e) {
+      console.warn('keccak256 not loaded', e);
+    }
+  })();
+
   const MAX_QTY = 5;
   const TIER_SIZE = 100; // contract: price doubles every 100 (priceFor = BASE_PRICE << (n-1)/100)
   const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1'; // contract owner (Mark)
-  const LSP4_METADATA_KEY = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238b';
+  const LSP4_METADATA_KEY_WITH_DD = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238bdd'; // LSP4Metadata + tokenId suffix
   const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', base: '0xf86325ed', priceFor: '0x8d5555f2',
     script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74', withdraw: '0x51cff8d9',
-    tokenMetadataJSON: '0x5e3f2b1d', imageBaseURI: '0x1e0d94ba', setDataForTokenId: '0xd6e6a7e8', setDataBatchForTokenIds: '0xbe9f0e6f' };
+    tokenMetadataJSON: '0xdd36d1d2', imageBaseURI: '0x77645839', setDataForTokenId: '0xd6c1407c' };
   const ERR = { '0x52df9fe5': 'sold out', '0x6871963e': 'price changed' }; // SoldOut(), WrongPrice(uint256,uint256)
   const MINTED_TOPIC = '0x5a3358a3d27a5373c0df2604662088d37894d56b7cfd27f315770440f4e0d919';
   const P5 = 'https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js';
@@ -325,6 +339,7 @@ const GG_NETS = {
   // Fix token metadata for UE: set icon=[600] and images=[[2400]] via setDataForTokenId
   async function fixImagesForUE() {
     if (st.fixBusy) return;
+    if (!keccak256) { st.fixMsg = 'Loading keccak256…'; render(); setTimeout(fixImagesForUE, 500); return; }
     const pv = st.provider;
     const acc = st.account;
     if (!acc) { st.fixMsg = 'Connect to fix metadata.'; render(); return; }
@@ -349,68 +364,76 @@ const GG_NETS = {
       
       st.fixProgress = `Preparing metadata for ${minted} tokens…`; render();
       
-      // For each token, build corrected metadata
-      const updates = [];
+      // For each token, build corrected metadata and encode properly
       for (let n = 1; n <= minted; n++) {
+        st.fixProgress = `Preparing token ${n} of ${minted}…`; render();
+        
         // Get seed
         const seedHex = await call(SEL.seedOf + pad(n));
         const seed = Number(BigInt(seedHex));
         
-        // Build corrected metadata JSON
+        // Build corrected metadata JSON (match contract structure exactly)
         const metadata = {
           LSP4Metadata: {
             name: `Generative Square #${n}`,
-            description: 'One square, every mint its own seed. Script and seed live on-chain.',
+            description: 'One square, its own seed. Script and seed live on-chain.',
+            links: [],
             icon: [{ width: 600, height: 600, url: `${baseURI}${n}-600.png` }],
             images: [[{ width: 2400, height: 2400, url: `${baseURI}${n}.png` }]],
+            assets: [],
             attributes: [{ key: 'Seed', value: seed, type: 'number' }]
           }
         };
         
         const jsonStr = JSON.stringify(metadata);
-        // Encode as VerifiableURI: bytes8(method+hashFunc+hashLen) + bytes32(hash) + bytes(url)
-        // For simplicity, use data URL without hash verification (0x0000 method)
+        const jsonBytes = new TextEncoder().encode(jsonStr);
+        
+        // Encode as VerifiableURI matching contract: 0x00008019f9b10020 + keccak256(json) + dataURL
+        const hash = keccak256(jsonBytes).slice(2); // remove 0x
         const dataURL = 'data:application/json;base64,' + btoa(jsonStr);
         const dataURLBytes = new TextEncoder().encode(dataURL);
         const dataURLHex = Array.from(dataURLBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        // Method: 0x0000 (no verification), hash function: 0x8019 (unused), hash length: 0xf9b1 (unused), 0x0020 (32 bytes, unused)
-        const header = '00008019f9b10020';
-        const emptyHash = '0'.repeat(64); // 32 bytes of 0
-        const value = '0x' + header + emptyHash + dataURLHex;
+        const value = '0x00008019f9b10020' + hash + dataURLHex;
         
-        updates.push({ tokenId: hex(n), key: LSP4_METADATA_KEY + 'dd', value });
-      }
-      
-      st.fixProgress = `Sending transaction for ${minted} tokens…`; render();
-      
-      // Build transaction - use setDataForTokenId sequentially (simpler than batch)
-      for (let i = 0; i < updates.length; i++) {
-        const { tokenId, key, value } = updates[i];
-        st.fixProgress = `Updating token ${i + 1} of ${minted}…`; render();
+        // ABI encode setDataForTokenId(bytes32 tokenId, bytes32 dataKey, bytes value)
+        const tokenIdPadded = pad(n);
+        const dataKey = LSP4_METADATA_KEY_WITH_DD.slice(2);
+        const valueBytes = (value.length - 2) / 2;
+        const valuePadding = valueBytes % 32 === 0 ? '' : '0'.repeat((32 - valueBytes % 32) * 2);
         
-        // setDataForTokenId(bytes32 tokenId, bytes32 dataKey, bytes value)
-        const valueLength = (value.length - 2) / 2;
-        const data = SEL.setDataForTokenId + tokenId.slice(2).padStart(64, '0') + key.slice(2) + 
-          '0000000000000000000000000000000000000000000000000000000000000060' + // offset
-          hex(valueLength).slice(2).padStart(64, '0') + value.slice(2) + (valueLength % 32 === 0 ? '' : '0'.repeat(64 - (valueLength % 32) * 2));
+        const data = SEL.setDataForTokenId + 
+          tokenIdPadded + // bytes32 tokenId
+          dataKey + // bytes32 dataKey
+          '0000000000000000000000000000000000000000000000000000000000000060' + // bytes value offset (3*32)
+          hex(valueBytes).slice(2).padStart(64, '0') + // bytes value length
+          value.slice(2) + valuePadding; // bytes value data + padding
+        
+        st.fixProgress = `Updating token ${n} of ${minted}…`; render();
         
         const tx = { from: acc, to: C.address, value: '0x0', data };
+        
         // Dry run first
-        try { await rpc('eth_call', [tx, 'latest']); } catch (e) {
-          st.fixMsg = `Failed at token ${i + 1}: ${e?.message || 'contract reverted'}`;
+        try { 
+          await rpc('eth_call', [tx, 'latest']); 
+        } catch (e) {
+          st.fixMsg = `Dry run failed at token ${n}: ${e?.message || 'contract reverted'}`;
+          console.warn('Dry run error:', e);
           return;
         }
         
         let hash;
-        try { hash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); } catch (e) {
-          if (e?.code === 4001) { st.fixMsg = `Cancelled at token ${i + 1}.`; return; }
-          st.fixMsg = `Failed to send transaction for token ${i + 1}.`;
+        try { 
+          hash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); 
+        } catch (e) {
+          if (e?.code === 4001) { st.fixMsg = `Cancelled at token ${n}.`; return; }
+          st.fixMsg = `Failed to send transaction for token ${n}.`;
           return;
         }
         
+        st.fixProgress = `Confirming token ${n} of ${minted}…`; render();
         const rc = await waitReceipt(hash);
         if (!rc || rc.status !== '0x1') {
-          st.fixMsg = `Failed at token ${i + 1} · <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`;
+          st.fixMsg = `Failed at token ${n} · <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`;
           return;
         }
       }
