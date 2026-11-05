@@ -326,12 +326,14 @@ const GG_NETS = {
       if (inGrid) {
         // In Grid: prefer browser extension (desktop) over up-provider (mobile UE app only)
         // Try to find UP extension first
-        st.wallets = await findWallets();
-        const upWallet = st.wallets.find(isUP);
+        const allWallets = await findWallets();
+        const upWallet = allWallets.find(isUP);
         
         if (upWallet) {
           // Desktop browser with UP extension: use extension even in Grid iframe
           st.useUpProvider = false;
+          // In Grid, only keep UP wallets that work properly; filter out others that may not work in iframe
+          st.wallets = allWallets.filter(isUP);
           useWallet(upWallet);
           // Check if already connected
           const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
