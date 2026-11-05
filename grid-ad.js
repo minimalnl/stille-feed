@@ -34,8 +34,9 @@ const GG_NETS = {
   const P5_SRI = 'sha512-uaz5GpnQoE6t5echKlX8P52czvsIGgLPcvlzfvRubLZ1Hp8JemUDnbUiAahbVtPb+jUVrNETuXvAhDDF/N3M4w==';
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
-  const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null,
+  const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null, wallets: [], wallet: null,
     busy: false, msg: '', progress: '' };
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
   const hexChain = '0x' + C.chainId.toString(16);
   const hex = (n) => '0x' + BigInt(n).toString(16);
@@ -112,7 +113,7 @@ const GG_NETS = {
       b.hidden = true;
     }
     el('ggNote').innerHTML = st.msg || (st.provider ? (canMint && q > 1 && !st.busy ? `${q} pieces = ${q} confirmations, one after the other.`
-      : !inGrid && st.account ? short(st.account) : '') :
+      : !inGrid && st.account ? short(st.account) + (st.wallets.length > 1 ? ` · ${esc(st.wallet?.info.name || '')} · <button type="button" class="gg-switch" id="ggSwitch">change</button>` : '') : '') :
       'Mint in your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> or with the ' +
       '<a href="https://chromewebstore.google.com/detail/universal-profiles/abpickdkkbnbcoepogfhkhennhfhehfn" target="_blank" rel="noopener">Universal Profile extension</a>.');
   }
@@ -236,8 +237,9 @@ const GG_NETS = {
     return (await now()) === C.chainId;
   }
 
-  async function connect() {
+  async function connect(picked) {
     if (st.busy) return;
+    if (!picked && st.wallets.length > 1) { st.msg = ''; render(); showPicker(); return; }
     const pv = st.provider;
     st.busy = true; st.msg = ''; render();
     try {
@@ -252,19 +254,54 @@ const GG_NETS = {
     }
   }
 
-  // Browser extension: EIP-6963 first (prefer the Universal Profile extension), then window.lukso / window.ethereum.
-  function findWallet() {
+  // Browser extensions: every EIP-6963 wallet, plus window.lukso / window.ethereum when not announced.
+  const WKEY = 'qf.wallet';
+  const isUP = (w) => /universal\s*profile|lukso|universaleverything/i.test(`${w.info?.name} ${w.info?.rdns}`);
+  function findWallets() {
     return new Promise((done) => {
       const seen = [];
-      const on = (e) => e.detail && e.detail.provider && seen.push(e.detail);
+      const add = (info, provider) => { if (provider && !seen.some((w) => w.provider === provider)) seen.push({ info: info || {}, provider }); };
+      const on = (e) => e.detail && add(e.detail.info, e.detail.provider);
       window.addEventListener('eip6963:announceProvider', on);
       window.dispatchEvent(new Event('eip6963:requestProvider'));
       setTimeout(() => {
         window.removeEventListener('eip6963:announceProvider', on);
-        const up = seen.find((d) => /universal\s*profile|lukso|universaleverything/i.test(`${d.info?.name} ${d.info?.rdns}`));
-        done((up || seen[0])?.provider || window.lukso || window.ethereum || null);
+        if (window.lukso && !seen.some(isUP)) add({ name: 'Universal Profile' }, window.lukso);
+        if (window.ethereum && !seen.length) add({ name: window.ethereum.isRabby ? 'Rabby' : window.ethereum.isMetaMask ? 'MetaMask' : 'Browser wallet' }, window.ethereum);
+        // Universal Profile first, the rest in announce order.
+        done(seen.filter(isUP).concat(seen.filter((w) => !isUP(w))));
       }, 400);
     });
+  }
+  function preferred() {
+    let saved = ''; try { saved = localStorage.getItem(WKEY) || ''; } catch (e) {}
+    return st.wallets.find((w) => w.info.name === saved) || st.wallets[0] || null;
+  }
+  const bound = new WeakSet();
+  function useWallet(w) {
+    st.wallet = w; st.provider = w.provider;
+    if (bound.has(w.provider)) return; bound.add(w.provider);
+    w.provider.on?.('accountsChanged', (a) => { if (st.provider !== w.provider) return; st.account = (a && a[0]) || null; st.msg = ''; render(); });
+    w.provider.on?.('chainChanged', () => { if (st.provider === w.provider) { st.msg = ''; render(); } });
+  }
+  function hidePicker() { const p = el('ggPick'); if (p) p.remove(); }
+  function showPicker() {
+    hidePicker();
+    const p = document.createElement('div');
+    p.id = 'ggPick'; p.className = 'gg-pick'; p.setAttribute('role', 'group'); p.setAttribute('aria-label', 'Choose a wallet');
+    const t = document.createElement('span'); t.className = 'gg-pick-t'; t.textContent = 'Connect with'; p.append(t);
+    st.wallets.forEach((w) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'gg-pick-w';
+      if (w === preferred()) b.classList.add('on');
+      if (w.info.icon && /^data:image\//.test(w.info.icon)) { const i = document.createElement('img'); i.src = w.info.icon; i.alt = ''; b.append(i); }
+      b.append(document.createTextNode(w.info.name || 'Wallet'));
+      b.onclick = () => { hidePicker(); try { localStorage.setItem(WKEY, w.info.name || ''); } catch (e) {} useWallet(w); connect(true); };
+      p.append(b);
+    });
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'gg-pick-x'; x.textContent = 'Cancel';
+    x.onclick = () => { hidePicker(); render(); }; p.append(x);
+    el('ggMint').closest('.gg-act').after(p);
+    p.querySelector('.gg-pick-w').focus();
   }
 
   async function initProvider() {
@@ -276,14 +313,16 @@ const GG_NETS = {
           st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
         }
       } else {
-        const pv = await findWallet();
-        if (!pv) { render(); return; }
-        st.provider = pv;
-        // Already connected earlier? Then skip the Connect step (no popup).
-        const [acc] = await pv.request({ method: 'eth_accounts', params: [] }).catch(() => []);
-        st.account = acc || null;
-        pv.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
-        pv.on?.('chainChanged', () => { st.msg = ''; render(); });
+        st.wallets = await findWallets();
+        const w = preferred();
+        if (!w) { render(); return; }
+        useWallet(w);
+        // Already connected earlier with the remembered wallet? Then skip the Connect step (no popup).
+        let saved = null; try { saved = localStorage.getItem(WKEY); } catch (e) {}
+        if (st.wallets.length === 1 || saved === w.info.name) {
+          const [acc] = await w.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
+          st.account = acc || null;
+        }
       }
       render();
     } catch (e) { console.warn('Wallet not loaded', e); }
@@ -296,6 +335,7 @@ const GG_NETS = {
     return seed > 0n || n <= (st.minted || 0) ? seed : null;
   }
 
+  el('ggNote').onclick = (e) => { if (e.target.id === 'ggSwitch' && !st.busy) showPicker(); };
   el('ggNew').onclick = () => draw(randomSeed());
   el('ggMint').onclick = () => (!inGrid && !st.account ? connect() : mint());
   el('ggQty').onclick = (e) => {
