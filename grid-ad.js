@@ -26,8 +26,10 @@ const GG_NETS = {
   const MAX_QTY = 5;
   const TIER_SIZE = 100; // contract: price doubles every 100 (priceFor = BASE_PRICE << (n-1)/100)
   const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1'; // contract owner (Mark)
+  const LSP4_METADATA_KEY = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238b';
   const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', base: '0xf86325ed', priceFor: '0x8d5555f2',
-    script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74', withdraw: '0x51cff8d9' };
+    script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74', withdraw: '0x51cff8d9',
+    tokenMetadataJSON: '0x5e3f2b1d', imageBaseURI: '0x1e0d94ba', setDataForTokenId: '0xd6e6a7e8', setDataBatchForTokenIds: '0xbe9f0e6f' };
   const ERR = { '0x52df9fe5': 'sold out', '0x6871963e': 'price changed' }; // SoldOut(), WrongPrice(uint256,uint256)
   const MINTED_TOPIC = '0x5a3358a3d27a5373c0df2604662088d37894d56b7cfd27f315770440f4e0d919';
   const P5 = 'https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js';
@@ -35,7 +37,7 @@ const GG_NETS = {
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
   const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null, wallets: [], wallet: null,
-    busy: false, msg: '', progress: '', useUpProvider: false, contractBalance: null, claimBusy: false, claimMsg: '' };
+    busy: false, msg: '', progress: '', useUpProvider: false, contractBalance: null, claimBusy: false, claimMsg: '', fixBusy: false, fixMsg: '', fixProgress: '' };
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
   const hexChain = '0x' + C.chainId.toString(16);
@@ -128,6 +130,17 @@ const GG_NETS = {
       claimBtn.disabled = st.claimBusy || !hasBalance;
       claimBtn.textContent = st.claimBusy ? 'Claiming…' : hasBalance ? `Claim ${lyx(st.contractBalance)}` : 'No revenue yet';
       claimNote.innerHTML = st.claimMsg || (isOwner && hasBalance ? 'Sends 0 LYX, calls withdraw(owner)' : '');
+    }
+    
+    // Fix images button (owner only)
+    const fixBtn = el('ggFix');
+    const fixNote = el('ggFixNote');
+    if (fixBtn && fixNote) {
+      const hasMinted = st.minted && st.minted > 0;
+      fixBtn.hidden = !canMint || !isOwner;
+      fixBtn.disabled = st.fixBusy || !hasMinted;
+      fixBtn.textContent = st.fixBusy ? (st.fixProgress || 'Updating…') : hasMinted ? 'Fix images for UE' : 'No tokens yet';
+      fixNote.innerHTML = st.fixMsg || (isOwner && hasMinted && !st.fixBusy ? `Sets icon=600, images=2400 for ${st.minted} tokens` : '');
     }
   }
 
@@ -309,6 +322,110 @@ const GG_NETS = {
     }
   }
 
+  // Fix token metadata for UE: set icon=[600] and images=[[2400]] via setDataForTokenId
+  async function fixImagesForUE() {
+    if (st.fixBusy) return;
+    const pv = st.provider;
+    const acc = st.account;
+    if (!acc) { st.fixMsg = 'Connect to fix metadata.'; render(); return; }
+    if (acc.toLowerCase() !== OWNER.toLowerCase()) { 
+      st.fixMsg = 'Only the contract owner can fix metadata.'; 
+      render(); 
+      return; 
+    }
+    st.fixBusy = true; st.fixMsg = ''; st.fixProgress = ''; render();
+    try {
+      if (!(await ensureChain(pv))) { st.fixMsg = `Switch to ${C.name} to fix metadata.`; return; }
+      
+      // Get minted count and imageBaseURI
+      const [mintedHex, baseURIHex] = await rpcBatch([
+        ['eth_call', [{ to: C.address, data: SEL.minted }, 'latest']],
+        ['eth_call', [{ to: C.address, data: SEL.imageBaseURI }, 'latest']]
+      ]);
+      const minted = Number(BigInt(mintedHex));
+      const baseURI = decodeString(baseURIHex);
+      
+      if (minted === 0) { st.fixMsg = 'No tokens minted yet.'; return; }
+      
+      st.fixProgress = `Preparing metadata for ${minted} tokens…`; render();
+      
+      // For each token, build corrected metadata
+      const updates = [];
+      for (let n = 1; n <= minted; n++) {
+        // Get seed
+        const seedHex = await call(SEL.seedOf + pad(n));
+        const seed = Number(BigInt(seedHex));
+        
+        // Build corrected metadata JSON
+        const metadata = {
+          LSP4Metadata: {
+            name: `Generative Square #${n}`,
+            description: 'One square, every mint its own seed. Script and seed live on-chain.',
+            icon: [{ width: 600, height: 600, url: `${baseURI}${n}-600.png` }],
+            images: [[{ width: 2400, height: 2400, url: `${baseURI}${n}.png` }]],
+            attributes: [{ key: 'Seed', value: seed, type: 'number' }]
+          }
+        };
+        
+        const jsonStr = JSON.stringify(metadata);
+        // Encode as VerifiableURI: bytes8(method+hashFunc+hashLen) + bytes32(hash) + bytes(url)
+        // For simplicity, use data URL without hash verification (0x0000 method)
+        const dataURL = 'data:application/json;base64,' + btoa(jsonStr);
+        const dataURLBytes = new TextEncoder().encode(dataURL);
+        const dataURLHex = Array.from(dataURLBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        // Method: 0x0000 (no verification), hash function: 0x8019 (unused), hash length: 0xf9b1 (unused), 0x0020 (32 bytes, unused)
+        const header = '00008019f9b10020';
+        const emptyHash = '0'.repeat(64); // 32 bytes of 0
+        const value = '0x' + header + emptyHash + dataURLHex;
+        
+        updates.push({ tokenId: hex(n), key: LSP4_METADATA_KEY + 'dd', value });
+      }
+      
+      st.fixProgress = `Sending transaction for ${minted} tokens…`; render();
+      
+      // Build transaction - use setDataForTokenId sequentially (simpler than batch)
+      for (let i = 0; i < updates.length; i++) {
+        const { tokenId, key, value } = updates[i];
+        st.fixProgress = `Updating token ${i + 1} of ${minted}…`; render();
+        
+        // setDataForTokenId(bytes32 tokenId, bytes32 dataKey, bytes value)
+        const valueLength = (value.length - 2) / 2;
+        const data = SEL.setDataForTokenId + tokenId.slice(2).padStart(64, '0') + key.slice(2) + 
+          '0000000000000000000000000000000000000000000000000000000000000060' + // offset
+          hex(valueLength).slice(2).padStart(64, '0') + value.slice(2) + (valueLength % 32 === 0 ? '' : '0'.repeat(64 - (valueLength % 32) * 2));
+        
+        const tx = { from: acc, to: C.address, value: '0x0', data };
+        // Dry run first
+        try { await rpc('eth_call', [tx, 'latest']); } catch (e) {
+          st.fixMsg = `Failed at token ${i + 1}: ${e?.message || 'contract reverted'}`;
+          return;
+        }
+        
+        let hash;
+        try { hash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); } catch (e) {
+          if (e?.code === 4001) { st.fixMsg = `Cancelled at token ${i + 1}.`; return; }
+          st.fixMsg = `Failed to send transaction for token ${i + 1}.`;
+          return;
+        }
+        
+        const rc = await waitReceipt(hash);
+        if (!rc || rc.status !== '0x1') {
+          st.fixMsg = `Failed at token ${i + 1} · <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`;
+          return;
+        }
+      }
+      
+      st.fixMsg = `Fixed ${minted} tokens! New mints still get old metadata until you run Fix again.`;
+    } catch (e) {
+      console.warn(e);
+      st.fixMsg = 'Fix failed: ' + (e?.message || 'unknown error');
+    } finally {
+      st.fixBusy = false;
+      st.fixProgress = '';
+      render();
+    }
+  }
+
   async function connect(picked) {
     if (st.busy) return;
     if (!picked && st.wallets.length > 1 && !st.useUpProvider) { st.msg = ''; render(); showPicker(); return; }
@@ -453,6 +570,8 @@ const GG_NETS = {
   };
   const claimBtn = el('ggClaim');
   if (claimBtn) claimBtn.onclick = () => claimRevenue();
+  const fixBtn = el('ggFix');
+  if (fixBtn) fixBtn.onclick = () => fixImagesForUE();
 
   // Nothing of this block loads (no RPC, no p5) until the visitor scrolls near the bottom.
   let started = false;
