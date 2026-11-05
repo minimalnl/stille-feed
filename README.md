@@ -1,4 +1,6 @@
-# Quiet Feed
+# stille feed
+
+_(formerly "Quiet Feed" — lowercase Dutch for "quiet feed".)_
 
 Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo, tags),
 Burnt Pix owned by the profile, and the latest Forever Moments and Hup posts, sorted together by time.
