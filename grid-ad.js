@@ -87,7 +87,7 @@ const GG_NETS = {
   // ---------- UI ----------
   function render() {
     const soldOut = st.minted !== null && st.minted >= st.max;
-    const canMint = !!st.provider && (inGrid || !!st.account);
+    const canMint = !!st.provider && !!st.account;
     const q = Math.min(st.qty, Math.max(1, left()));
     el('ggCount').textContent = st.minted === null ? '…' : soldOut ? `${st.max} of ${st.max} · sold out` : `#${st.minted + 1} of ${st.max}`;
     el('ggPrice').textContent = !st.prices.length || soldOut ? '' : `${lyx(st.prices[0])} each`;
@@ -112,7 +112,7 @@ const GG_NETS = {
       b.hidden = true;
     }
     el('ggNote').innerHTML = st.msg || (st.provider ? (canMint && q > 1 && !st.busy ? `${q} pieces = ${q} confirmations, one after the other.`
-      : !inGrid && st.account ? short(st.account) + (st.wallets.length > 1 ? ` · ${esc(st.wallet?.info.name || '')} · <button type="button" class="gg-switch" id="ggSwitch">change</button>` : '') : '') :
+      : st.account ? short(st.account) + (!inGrid && st.wallets.length > 1 ? ` · ${esc(st.wallet?.info.name || '')} · <button type="button" class="gg-switch" id="ggSwitch">change</button>` : '') : '') :
       'Mint in your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> or with the ' +
       '<a href="https://chromewebstore.google.com/detail/universal-profiles/abpickdkkbnbcoepogfhkhennhfhehfn" target="_blank" rel="noopener">Universal Profile extension</a>.');
   }
@@ -165,9 +165,17 @@ const GG_NETS = {
     try {
       // In the Grid the chain is fixed by the Grid: check it before asking anyone to connect.
       if (inGrid && !(await ensureChain(pv))) { st.msg = `Minting is on ${C.name} for now; this Grid is on another network.`; return; }
-      let [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
-      if (!acc) [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
-      if (!acc) { st.msg = inGrid ? 'Connect your profile to the Grid to mint.' : 'Connect a profile to mint.'; return; }
+      let acc;
+      if (inGrid) {
+        // Grid: visitor account comes from eth_accounts (set when visitor connects via UE). Never force eth_requestAccounts.
+        [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
+        if (!acc) { st.msg = 'Connect to this mini-app in your Grid to mint.'; return; }
+      } else {
+        // Standalone: visitor connects via wallet picker and eth_requestAccounts
+        [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
+        if (!acc) [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
+        if (!acc) { st.msg = 'Connect a profile to mint.'; return; }
+      }
       if (!inGrid && !(await ensureChain(pv))) { st.msg = `Switch to ${C.name} to mint.`; return; }
       await refresh();
       if (left() === 0) { st.msg = 'Sold out.'; return; }
@@ -242,9 +250,18 @@ const GG_NETS = {
     const pv = st.provider;
     st.busy = true; st.msg = ''; render();
     try {
-      const [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
-      st.account = acc || null;
-      if (acc && !(await ensureChain(pv))) st.msg = `${short(acc)} · switch to ${C.name} to mint.`;
+      if (inGrid) {
+        // Grid: refresh visitor account from eth_accounts (visitor connects via UE, not via eth_requestAccounts popup)
+        const [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
+        st.account = acc || null;
+        if (!acc) st.msg = 'Connect to this mini-app in your Grid to mint.';
+        else if (!(await ensureChain(pv))) st.msg = `${short(acc)} · Grid is on another network.`;
+      } else {
+        // Standalone: visitor connects via wallet picker and eth_requestAccounts
+        const [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
+        st.account = acc || null;
+        if (acc && !(await ensureChain(pv))) st.msg = `${short(acc)} · switch to ${C.name} to mint.`;
+      }
     } catch (e) {
       console.warn(e);
       st.msg = e && e.code === 4001 ? '' : 'Could not connect.';
@@ -308,7 +325,12 @@ const GG_NETS = {
       if (inGrid) {
         st.provider = await (window.qfUP || Promise.resolve(null));
         if (st.provider) {
-          st.provider.on?.('accountsChanged', () => { st.msg = ''; render(); });
+          // Grid: visitor account comes from accounts/eth_accounts (set when visitor connects to mini-app via UE)
+          // Try multiple properties: accounts, allowedAccounts, or call eth_accounts
+          const initial = st.provider.accounts || st.provider.allowedAccounts || 
+            (await st.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []));
+          st.account = (initial && initial[0]) || null;
+          st.provider.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
           st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
         }
       } else {
