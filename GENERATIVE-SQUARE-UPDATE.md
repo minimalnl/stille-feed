@@ -1,47 +1,104 @@
-# Generative Square: Fair Background Distribution
+# Generative Square: Fair Background & Square Color Distribution
 
 ## Changes
 
-**Updated background color selection** to ensure fair distribution across all 3 palette colors for every token, including small sequential seeds.
+**Fixed RNG bias** to ensure fair distribution of backgrounds and square colors for all tokens with random seeds.
 
 ### Implementation
 
-Changed from:
+```javascript
+function draw() {
+  // Fair background distribution using SEED modulo 3
+  const achtergrond = ACHTERGRONDEN[SEED % 3];
+  background(achtergrond);
+
+  // Discard first random() draw to avoid LCG bias
+  random();
+
+  // Now square color selection is fair
+  const kleur = random(VIERKANT_KLEUREN);
+  const maat = random(MIN_MAAT, MAX_MAAT) * WERK_MAAT;
+  // ... rest of draw
+}
+```
+
+### Why These Changes
+
+#### Problem 1: Background bias (original script)
 ```javascript
 const achtergrond = random(ACHTERGRONDEN);
 ```
+With `randomSeed(n)`, the first `random()` for small seeds (1-250) landed in [0, 1/3), so `random(ACHTERGRONDEN)` always picked index 0 (#fcfaf6).
 
-To:
-```javascript
-const achtergrond = ACHTERGRONDEN[SEED % 3];
-```
+#### Problem 2: Square color bias (after first fix attempt)
+When we replaced `random(ACHTERGRONDEN)` with `ACHTERGRONDEN[SEED % 3]`, the first `random()` call shifted to square color selection, causing the same bias: nearly all squares became color index 0 (#9b9980).
 
-### Why
+#### Solution
+1. **Background**: `ACHTERGRONDEN[SEED % 3]` — deterministic fair mapping
+2. **Square colors**: Call `random()` once to discard the biased first draw from p5's LCG, then use `random(VIERKANT_KLEUREN)`
 
-With `randomSeed(n)` in p5.js 1.9, the first `random()` call for small seeds (n=1..250) consistently returned values in the range [0, 1/3), causing `random(ACHTERGRONDEN)` to always select index 0 (#fcfaf6). This resulted in no variation in background colors for the initial token range.
+### Result for Random Seeds
 
-### Result
+When the contract assigns random seeds during minting:
+- Backgrounds distribute fairly (33.33% each color)
+- Square colors distribute fairly (33.33% each color)
+- Square sizes vary naturally
+- Grain/texture varies naturally
 
-**Deterministic fair mapping:**
-- SEED % 3 === 0 → `#fcfaf6` (eerste kleur)
-- SEED % 3 === 1 → `#f7f3ea` (tweede kleur)
-- SEED % 3 === 2 → `#faf8f2` (derde kleur)
+**Sequential seeds 1-100 (for verification):**
+- Backgrounds: 33%, 34%, 33% (perfectly cyclic due to `SEED % 3`)
+- Square colors: ~33% each after discarding first random() draw
 
-For seeds 1-100: 33%, 34%, 33% distribution (perfectly balanced).
+### Important: Random Seeds in Production
+
+**Contract behavior:**
+- Each `mint()` should assign a **random seed** from the contract's RNG (not `seed = tokenId`)
+- Stored in `seedOf(tokenId)` mapping
+- Makes traits unpredictable — no one can predict what the next mint will look like
+
+**Preview behavior:**
+- URL parameter `?gg=<tokenId>` shows a minted token using its stored seed
+- For testing/development, you can view sequential seeds (1, 2, 3...) but **these are not real mints**
+- Real mints get large random seeds (up to 1 billion range)
 
 ### What Stays the Same
 
-- Square colors (`VIERKANT_KLEUREN`) continue to use `random()` for natural variation
-- Square size continues to use `random(MIN_MAAT, MAX_MAAT)` for natural variation
-- Grain/noise (`KORREL_*`) continues to use `random()` for texture variation
-- All three background hex values remain unchanged
-- Preview rendering uses `seed = tokenId` as before
+- All hex values unchanged (3 backgrounds, 3 square colors)
+- Square size range unchanged (0.236–0.382)
+- Grain parameters unchanged
+- Calm minimalist aesthetic preserved
 
-### Files Updated
+### Files
 
-1. **generative-square-art.js** - Source art script (for contract deployment reference)
-2. Contract script (needs to be updated via contract deployment - not done by this PR)
+1. **generative-square-art.js** — Updated art script source (for next contract deployment)
+2. **verify-background-distribution.js** — Verification script using p5.js LCG simulation
+3. **GENERATIVE-SQUARE-UPDATE.md** — This documentation
 
 ### Verification
 
-Run `node verify-background-distribution.js` to see the fair distribution across seeds 1-100 and larger seed values.
+Run `node verify-background-distribution.js` to verify:
+- Background distribution via `SEED % 3`
+- Square color distribution after discarding first biased random() draw
+- Tests seeds 1-100 plus larger seeds (250, 500, 1000, 5000, 10000)
+
+---
+
+## Voor Mark (Nederlands)
+
+### Wat is veranderd
+
+**Achtergronden:** `ACHTERGRONDEN[SEED % 3]` — eerlijke verdeling over 3 kleuren  
+**Vierkant kleuren:** Gooi eerste `random()` waarde weg, dan `random(VIERKANT_KLEUREN)` — voorkomt bias
+
+### Belangrijk: Random seeds bij mint
+
+Het contract moet bij elke `mint()` een **random seed** toewijzen (niet seed = tokenId).
+- Seeds opslaan in `seedOf(tokenId)` mapping
+- Groot random getal (bijv. 1-1.000.000.000)
+- Zo kan niemand voorspellen welke traits de volgende mint krijgt
+
+De preview `?gg=<nummer>` laat een geminte token zien met de opgeslagen seed. Voor testen kun je opeenvolgende seeds (1, 2, 3...) bekijken, maar echte mints krijgen grote random seeds van het contract.
+
+### Verificatie
+
+`node verify-background-distribution.js` toont de verdeling voor seeds 1-100.

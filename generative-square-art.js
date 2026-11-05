@@ -30,9 +30,14 @@ function setup() {
 
 function draw() {
   // Fair background distribution: use SEED modulo 3 for deterministic mapping
-  // across all 3 palette colors, instead of random() which favors index 0 for small seeds.
+  // across all 3 palette colors, independent of p5's random().
   const achtergrond = ACHTERGRONDEN[SEED % 3];
   background(achtergrond);
+
+  // Discard the first random() draw to avoid LCG bias for small seeds.
+  // For seeds 1-250, the first random() after randomSeed(n) lands in [0, 1/3),
+  // which would make random(VIERKANT_KLEUREN) always pick index 0.
+  random();
 
   const kleur = random(VIERKANT_KLEUREN);
   const maat = random(MIN_MAAT, MAX_MAAT) * WERK_MAAT;
