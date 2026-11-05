@@ -332,8 +332,8 @@ const GG_NETS = {
         if (upWallet) {
           // Desktop browser with UP extension: use extension even in Grid iframe
           st.useUpProvider = false;
-          // In Grid, only keep UP wallets that work properly; filter out others that may not work in iframe
-          st.wallets = allWallets.filter(isUP);
+          // In Grid, only keep the wallet we actually use; hide picker (connect straight to working extension)
+          st.wallets = [upWallet];
           useWallet(upWallet);
           // Check if already connected
           const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
