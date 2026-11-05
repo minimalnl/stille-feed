@@ -25,6 +25,8 @@ h1{font-weight:400;font-size:28px;letter-spacing:.01em;margin:0}
 .profile h2{font-weight:400;font-size:24px;margin:0}
 .profile .addr{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);margin-top:4px}
 .profile .desc{max-width:520px;margin:14px auto 0;color:#6b6e63;font-size:15px}
+.profile-links a{color:var(--sage-d);text-decoration:none}
+.profile-links a:hover{text-decoration:underline}
 .tags{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:14px}
 .tag{font-size:12px;background:var(--sand);color:#7d6b52;border-radius:999px;padding:3px 10px}
 .filters{display:flex;justify-content:center;gap:4px;margin:0 0 32px}

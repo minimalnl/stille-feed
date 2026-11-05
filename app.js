@@ -27,8 +27,19 @@ const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
 // IPFS images through the resizer (same format, just not bigger than needed); other URLs unchanged.
-const cidOf = (u) => (String(u || '').match(/^ipfs:\/\/([A-Za-z0-9]+)/) || String(u || '').match(/\/ipfs\/([A-Za-z0-9]{46,})/) || [])[1];
+const cidOf = (u) => (String(u || '').match(/^ipfs:\/\/([A-Za-z0-9]+)/)
+  || String(u || '').match(/\/ipfs\/([A-Za-z0-9]+)/)
+  || String(u || '').match(/\/image\/([A-Za-z0-9]+)/) || [])[1];
 const sized = (u, w) => { const c = cidOf(u); return c ? `${IMG}${c}?width=${w}` : ipfs(u); };
+// When the UP cloud IPFS gateway 404s, try public gateways before giving up.
+const IPFS_GATEWAYS = [
+  'https://api.universalprofile.cloud/ipfs/',
+  'https://ipfs.io/ipfs/',
+  'https://dweb.link/ipfs/',
+  'https://w3s.link/ipfs/',
+];
+// Universal Everything's Envio indexer keeps a copy of LSP3 even when the CID is gone from IPFS.
+const INDEXER = 'https://envio.lukso-mainnet.universal.tech/v1/graphql';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
 const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
 const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -110,16 +121,49 @@ function decodeUrlFromValue(hex) {
   const bytes = new Uint8Array(urlHex.match(/../g).map((b) => parseInt(b, 16)));
   return new TextDecoder().decode(bytes);
 }
-const loadLSP3 = (address) => cached('lsp3:' + address, 10 * MIN, async () => {
-  const result = await rpcCall(address, '0x54f6127f' + LSP3_KEY.slice(2)).catch(() => null);
-  if (!result || result === '0x') throw new Error('No Universal Profile');
-  const url = decodeUrlFromValue(result);
-  if (!url) throw new Error('No LSP3 profile');
-  const json = url.startsWith('data:') ? await (await fetch(url)).json() : await getJSON(ipfs(url));
+async function fetchIpfsJson(url) {
+  if (!url) throw new Error('No metadata URL');
+  if (url.startsWith('data:')) return (await fetch(url)).json();
+  const cid = cidOf(url) || (url.startsWith('ipfs://') ? url.slice(7) : null);
+  if (!cid) return getJSON(ipfs(url));
+  let last;
+  for (const g of IPFS_GATEWAYS) {
+    try { return await getJSON(g + cid); } catch (e) { last = e; }
+  }
+  throw last || new Error('IPFS unreachable');
+}
+async function loadLSP3FromIndex(address) {
+  const query = `query($a:String!){ Profile(where:{id:{_eq:$a}}){ id name description tags profileImages { src width height url } } }`;
+  const d = await getJSON(INDEXER, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ query, variables: { a: address.toLowerCase() } }),
+  });
+  const p = (d.data && d.data.Profile || [])[0];
+  if (!p || (!p.name && !(p.profileImages || []).length)) throw new Error('No indexed profile');
+  const imgs = [...(p.profileImages || [])].sort((a, b) => (a.width || 0) - (b.width || 0));
+  const img = imgs.find((i) => (i.width || 0) >= 224) || imgs[imgs.length - 1];
+  const raw = (img && (img.src || img.url)) || '';
+  return { name: p.name, description: p.description || '', tags: p.tags || [], image: raw ? sized(raw, 224) : '' };
+}
+function profileFromLSP3Json(json) {
   const p = json.LSP3Profile || json;
   const imgs = [...(p.profileImage || [])].sort((a, b) => (a.width || 0) - (b.width || 0));
   const img = imgs.find((i) => (i.width || 0) >= 224) || imgs[imgs.length - 1];
   return { name: p.name, description: p.description, tags: p.tags || [], image: img ? sized(img.url, 224) : '' };
+}
+// Prefer on-chain VerifiableURI → IPFS. If the CID is missing (common after a flaky pin), fall back to the
+// LUKSO indexer that Universal Everything uses — same name and photo, without re-publishing.
+const loadLSP3 = (address) => cached('lsp3:' + address, 10 * MIN, async () => {
+  try {
+    const result = await rpcCall(address, '0x54f6127f' + LSP3_KEY.slice(2));
+    if (result && result !== '0x') {
+      const url = decodeUrlFromValue(result);
+      if (url) return profileFromLSP3Json(await fetchIpfsJson(url));
+    }
+  } catch (e) { console.warn('LSP3 via IPFS failed, trying indexer', e); }
+  try { return await loadLSP3FromIndex(address); }
+  catch (e) { console.warn('LSP3 via indexer failed', e); }
+  throw new Error('No LSP3 profile');
 });
 
 // ---------- Burnt Pix (LSP8 tokenIdsOf + on-chain LSP4Metadata per token) ----------
@@ -372,10 +416,21 @@ function show(address) {
   $('#filters').hidden = false;
   $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
   $('#status').textContent = '';
-  loadLSP3(address).then((p) => { if (address === state.address) renderProfile(p, address); }).catch(() => {
+  loadLSP3(address).then((p) => { if (address === state.address) renderProfile(p, address); }).catch(async () => {
     if (address !== state.address) return;
-    $('#profile').innerHTML = `<img class="avatar" src="sun.svg" alt=""><h2>Unknown profile</h2><div class="addr">${esc(short(address))}</div>
-      <p class="desc">No LSP3 profile found at this address on LUKSO mainnet.</p>`;
+    let isContract = false;
+    try { const code = await rpc('eth_getCode', [address, 'latest']); isContract = !!(code && code !== '0x'); } catch {}
+    if (address !== state.address) return;
+    const inspect = `https://universaleverything.io/${address}`;
+    $('#profile').innerHTML = `<img class="avatar" src="sun.svg" alt="">
+      <h2>${isContract ? 'Universal Profile' : 'Unknown address'}</h2>
+      <div class="addr" title="${esc(address)}">${esc(short(address))}</div>
+      <p class="desc">${isContract
+        ? 'Profile metadata could not be loaded — the on-chain IPFS file may be missing. Burnt Pix, Moments, and Hup below still show when they exist.'
+        : 'No Universal Profile contract at this address on LUKSO mainnet.'}</p>
+      <p class="desc profile-links"><a href="${esc(inspect)}" target="_blank" rel="noopener">Open on Universal Everything ↗</a>${
+        isContract ? ' · <a href="https://my.universalprofile.cloud" target="_blank" rel="noopener">Update profile in UP cloud ↗</a>' : ''
+      }</p>`;
   });
   showPix(address);
   fetchBatch();
