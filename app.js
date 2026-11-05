@@ -331,7 +331,10 @@ function renderProfile(p, address) {
   $('#profile').innerHTML = `
     ${p.image ? `<img class="avatar" src="${esc(p.image)}" alt="Profile picture of ${esc(p.name)}" width="112" height="112" decoding="async">` : `<img class="avatar" src="sun.svg" alt="">`}
     <h2>${esc(p.name || 'Unnamed profile')}</h2>
-    <div class="addr" title="${esc(address)}">${esc(short(address))}</div>
+    <div class="idrow">
+      <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
+      <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener">profile</a>
+    </div>
     ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
     ${p.tags.length ? `<div class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}`;
 }
@@ -424,7 +427,10 @@ function show(address) {
     const inspect = `https://universaleverything.io/${address}`;
     $('#profile').innerHTML = `<img class="avatar" src="sun.svg" alt="">
       <h2>${isContract ? 'Universal Profile' : 'Unknown address'}</h2>
-      <div class="addr" title="${esc(address)}">${esc(short(address))}</div>
+      <div class="idrow">
+      <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
+      <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener">profile</a>
+    </div>
       <p class="desc">${isContract
         ? 'Profile metadata could not be loaded — the on-chain IPFS file may be missing. Burnt Pix, Moments, and Hup below still show when they exist.'
         : 'No Universal Profile contract at this address on LUKSO mainnet.'}</p>
@@ -508,3 +514,29 @@ if (IN_FRAME) {
 } else {
   show(fallbackAddress());
 }
+
+// ---------- Header hide/show (remembered, like the address) ----------
+(() => {
+  const KEY = 'qf.hideHeader', btn = $('#chromeToggle');
+  const apply = (hide) => {
+    $('#chrome').hidden = hide; btn.textContent = hide ? 'show header' : 'hide header';
+    btn.setAttribute('aria-expanded', String(!hide)); document.body.classList.toggle('chrome-off', hide);
+  };
+  let hide = false; try { hide = localStorage.getItem(KEY) === '1'; } catch {}
+  apply(hide);
+  btn.addEventListener('click', () => {
+    hide = !hide; apply(hide);
+    try { hide ? localStorage.setItem(KEY, '1') : localStorage.removeItem(KEY); } catch {}
+  });
+})();
+
+// ---------- Click the address to copy it ----------
+$('#profile').addEventListener('click', async (e) => {
+  const b = e.target.closest('.addr[data-addr]'); if (!b) return;
+  const full = b.dataset.addr, label = b.textContent;
+  try { await navigator.clipboard.writeText(full); }
+  catch { const t = document.createElement('textarea'); t.value = full; document.body.append(t); t.select();
+    try { document.execCommand('copy'); } catch {} t.remove(); }
+  b.textContent = 'copied'; b.classList.add('done');
+  clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = label; b.classList.remove('done'); }, 1400);
+});
