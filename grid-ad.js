@@ -324,13 +324,17 @@ const GG_NETS = {
   async function initProvider() {
     try {
       if (inGrid) {
-        // In Grid: prefer browser extension (desktop) over up-provider (mobile UE app only)
-        // Try to find UP extension first
+        // In Grid: detect real EIP-6963 extension (desktop) vs mobile UE app
+        // Discover wallets via EIP-6963 (real extensions announce with rdns/name/icon)
         const allWallets = await findWallets();
         const upWallet = allWallets.find(isUP);
         
-        if (upWallet) {
-          // Desktop browser with UP extension: use extension even in Grid iframe
+        // Check if it's a REAL extension: EIP-6963 announced with proper info.rdns
+        // Bare window.lukso (no EIP-6963) doesn't have info.rdns and may not work in iframe
+        const hasRealExtension = upWallet && upWallet.info && upWallet.info.rdns;
+        
+        if (hasRealExtension) {
+          // Desktop Grid: real UP extension detected via EIP-6963, use it
           st.useUpProvider = false;
           // In Grid, only keep the wallet we actually use; hide picker (connect straight to working extension)
           st.wallets = [upWallet];
@@ -339,7 +343,7 @@ const GG_NETS = {
           const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
           st.account = acc || null;
         } else {
-          // Mobile UE app (no extension): use up-provider for mini-app connect flow
+          // Mobile UE app: no real extension, use up-provider for mini-app connect flow
           st.useUpProvider = true;
           st.provider = await (window.qfUP || Promise.resolve(null));
           if (st.provider) {
