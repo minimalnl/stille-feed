@@ -324,31 +324,35 @@ const GG_NETS = {
   async function initProvider() {
     try {
       if (inGrid) {
-        // In Grid: prefer up-provider (mobile UE app) over browser extension (desktop fallback)
-        // Try up-provider first (available in mobile UE app)
-        st.provider = await (window.qfUP || Promise.resolve(null));
+        // In Grid: detect real EIP-6963 extension (desktop) vs mobile UE app
+        // Discover wallets via EIP-6963 (real extensions announce with rdns/name/icon)
+        const allWallets = await findWallets();
+        const upWallet = allWallets.find(isUP);
         
-        if (st.provider) {
-          // Mobile UE app: up-provider available, use it for mini-app connect flow
-          st.useUpProvider = true;
-          // Don't call eth_requestAccounts on load; wait for user click on Connect
-          const initial = st.provider.accounts || st.provider.allowedAccounts || 
-            (await st.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []));
-          st.account = (initial && initial[0]) || null;
-          st.provider.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
-          st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
+        // Check if it's a REAL extension: EIP-6963 announced with proper info.rdns
+        // Bare window.lukso (no EIP-6963) doesn't have info.rdns and may not work in iframe
+        const hasRealExtension = upWallet && upWallet.info && upWallet.info.rdns;
+        
+        if (hasRealExtension) {
+          // Desktop Grid: real UP extension detected via EIP-6963, use it
+          st.useUpProvider = false;
+          // In Grid, only keep the wallet we actually use; hide picker (connect straight to working extension)
+          st.wallets = [upWallet];
+          useWallet(upWallet);
+          // Check if already connected
+          const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
+          st.account = acc || null;
         } else {
-          // Desktop browser: no up-provider, fall back to extension
-          const allWallets = await findWallets();
-          const upWallet = allWallets.find(isUP);
-          if (upWallet) {
-            st.useUpProvider = false;
-            // In Grid, only keep the wallet we actually use; hide picker (connect straight to working extension)
-            st.wallets = [upWallet];
-            useWallet(upWallet);
-            // Check if already connected
-            const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
-            st.account = acc || null;
+          // Mobile UE app: no real extension, use up-provider for mini-app connect flow
+          st.useUpProvider = true;
+          st.provider = await (window.qfUP || Promise.resolve(null));
+          if (st.provider) {
+            // Don't call eth_requestAccounts on load; wait for user click on Connect
+            const initial = st.provider.accounts || st.provider.allowedAccounts || 
+              (await st.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []));
+            st.account = (initial && initial[0]) || null;
+            st.provider.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
+            st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
           }
         }
       } else {
