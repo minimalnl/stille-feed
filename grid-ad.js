@@ -40,7 +40,7 @@ const GG_NETS = {
   const MAX_QTY = 5;
   const TIER_SIZE = 100; // contract: price doubles every 100 (priceFor = BASE_PRICE << (n-1)/100)
   const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1'; // contract owner (Mark)
-  const LSP4_METADATA_KEY_WITH_DD = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238bdd'; // LSP4Metadata + tokenId suffix
+  const LSP4_METADATA_KEY_WITH_DD = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238bdd'; // full LSP4Metadata data key
   const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', base: '0xf86325ed', priceFor: '0x8d5555f2',
     script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74', withdraw: '0x51cff8d9',
     tokenMetadataJSON: '0xdd36d1d2', imageBaseURI: '0x77645839', setDataForTokenId: '0xd6c1407c' };
@@ -389,11 +389,11 @@ const GG_NETS = {
         const jsonBytes = new TextEncoder().encode(jsonStr);
         
         // Encode as VerifiableURI matching contract: 0x00008019f9b10020 + keccak256(json) + dataURL
-        const hash = keccak256(jsonBytes).slice(2); // remove 0x
+        const jsonHash = keccak256(jsonBytes).slice(2); // remove 0x
         const dataURL = 'data:application/json;base64,' + btoa(jsonStr);
         const dataURLBytes = new TextEncoder().encode(dataURL);
         const dataURLHex = Array.from(dataURLBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        const value = '0x00008019f9b10020' + hash + dataURLHex;
+        const value = '0x00008019f9b10020' + jsonHash + dataURLHex;
         
         // ABI encode setDataForTokenId(bytes32 tokenId, bytes32 dataKey, bytes value)
         const tokenIdPadded = pad(n);
@@ -421,9 +421,9 @@ const GG_NETS = {
           return;
         }
         
-        let hash;
+        let txHash;
         try { 
-          hash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); 
+          txHash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); 
         } catch (e) {
           if (e?.code === 4001) { st.fixMsg = `Cancelled at token ${n}.`; return; }
           st.fixMsg = `Failed to send transaction for token ${n}.`;
@@ -431,9 +431,9 @@ const GG_NETS = {
         }
         
         st.fixProgress = `Confirming token ${n} of ${minted}…`; render();
-        const rc = await waitReceipt(hash);
+        const rc = await waitReceipt(txHash);
         if (!rc || rc.status !== '0x1') {
-          st.fixMsg = `Failed at token ${n} · <a href="${C.explorer}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>`;
+          st.fixMsg = `Failed at token ${n} · <a href="${C.explorer}/tx/${txHash}" target="_blank" rel="noopener">view ↗</a>`;
           return;
         }
       }
