@@ -18,6 +18,205 @@ const GG_NETS = {
     address: '0x33Dd4D3da812e2cc1B3692456470DFDD99659e62', explorer: 'https://explorer.execution.mainnet.lukso.network' },
 };
 
+// Pure LSP4 helpers for the owner-only "Fix images for UE" tool. Universal Everything follows the
+// per-token getDataForTokenId override. The contract's tokenMetadataJSON() stays the immutable
+// computed metadata (it still mentions the 600px file) until a new deployment, which this tool is not.
+const GGUeFix = (() => {
+  const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1';
+  const LSP4_METADATA_KEY = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e';
+  // 0x0000 + keccak256(utf8) method 0x8019f9b1 + hash length 0x0020. Matches bytes already stored on the contract.
+  const VERIFIABLE_URI_PREFIX = '00008019f9b10020';
+  const SEL = {
+    tokenMetadataJSON: '0xdd36d1d2', // tokenMetadataJSON(uint256)
+    imageBaseURI: '0x77645839',
+    setDataForTokenId: '0xd6c1407c',
+    getDataForTokenId: '0x16e023b3',
+  };
+  const SIZE = 2400;
+  const LIMITATION = 'New mints still get the contract\'s computed metadata until you run this again.';
+
+  const originalUrl = (baseURI, tokenId) => `${baseURI}${tokenId}.png`;
+  const image2400 = (url) => ({ width: SIZE, height: SIZE, url });
+  const lsp4 = (metadata) => {
+    if (!metadata || typeof metadata !== 'object') return null;
+    if (metadata.LSP4Metadata && typeof metadata.LSP4Metadata === 'object') return metadata.LSP4Metadata;
+    return metadata;
+  };
+  const pictureList = (value, out) => {
+    if (Array.isArray(value)) { value.forEach((item) => pictureList(item, out)); return; }
+    if (value && typeof value === 'object' && ('url' in value || 'width' in value || 'height' in value)) out.push(value);
+  };
+  const has600Image = (metadata) => {
+    const lsp = lsp4(metadata);
+    if (!lsp) return false;
+    const pics = [];
+    pictureList(lsp.icon, pics);
+    pictureList(lsp.images, pics);
+    return pics.some((img) => Number(img.width) === 600 || Number(img.height) === 600 || String(img.url || '').includes('-600.png'));
+  };
+  const isOne2400 = (img, url) => !!img && typeof img === 'object' && Number(img.width) === SIZE && Number(img.height) === SIZE && img.url === url;
+  function isAlreadyCorrect(metadata, baseURI, tokenId) {
+    const lsp = lsp4(metadata);
+    if (!lsp) return false;
+    const url = originalUrl(baseURI, tokenId);
+    if (!Array.isArray(lsp.icon) || lsp.icon.length !== 1 || !isOne2400(lsp.icon[0], url)) return false;
+    if (!Array.isArray(lsp.images) || lsp.images.length !== 1 || !Array.isArray(lsp.images[0]) || lsp.images[0].length !== 1) return false;
+    if (!isOne2400(lsp.images[0][0], url)) return false;
+    return !has600Image(metadata);
+  }
+  function withOriginalImages(metadata, baseURI, tokenId) {
+    if (!metadata || typeof metadata !== 'object') throw new Error('missing metadata');
+    const next = JSON.parse(JSON.stringify(metadata));
+    const url = originalUrl(baseURI, tokenId);
+    const lsp = next.LSP4Metadata && typeof next.LSP4Metadata === 'object' ? next.LSP4Metadata : next;
+    lsp.icon = [image2400(url)];
+    lsp.images = [[image2400(url)]];
+    return next.LSP4Metadata ? next : { LSP4Metadata: next };
+  }
+  function fallbackMetadata(tokenId, baseURI, seed) {
+    const url = originalUrl(baseURI, tokenId);
+    return {
+      LSP4Metadata: {
+        name: `Generative Square #${tokenId}`,
+        description: 'One square, its own seed. Script and seed live on-chain.',
+        links: [],
+        icon: [image2400(url)],
+        images: [[image2400(url)]],
+        assets: [],
+        attributes: [{ key: 'Seed', value: seed, type: 'number' }],
+      },
+    };
+  }
+  function assertImageFields2400(metadata, baseURI, tokenId) {
+    if (!isAlreadyCorrect(metadata, baseURI, tokenId) || has600Image(metadata)) {
+      throw new Error('metadata image fields are not the 2400 original');
+    }
+  }
+  // action: 'skip' | 'need-seed' | 'update'. Patch keeps every field except icon and images.
+  function decideToken(existing, baseURI, tokenId, seed) {
+    if (isAlreadyCorrect(existing, baseURI, tokenId)) return { action: 'skip' };
+    if (!existing) {
+      if (seed == null) return { action: 'need-seed' };
+      const metadata = fallbackMetadata(tokenId, baseURI, seed);
+      assertImageFields2400(metadata, baseURI, tokenId);
+      return { action: 'update', metadata };
+    }
+    const metadata = withOriginalImages(existing, baseURI, tokenId);
+    assertImageFields2400(metadata, baseURI, tokenId);
+    return { action: 'update', metadata };
+  }
+  function utf8ToBase64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+  function utf8FromBase64(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function encodeVerifiableURI(jsonStr, keccak256) {
+    const jsonBytes = new TextEncoder().encode(jsonStr);
+    const digest = String(keccak256(jsonBytes)).replace(/^0x/i, '').toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error('keccak256 must be 32 bytes');
+    const dataURL = 'data:application/json;base64,' + utf8ToBase64(jsonStr);
+    const urlHex = Array.from(new TextEncoder().encode(dataURL), (b) => b.toString(16).padStart(2, '0')).join('');
+    return '0x' + VERIFIABLE_URI_PREFIX + digest + urlHex;
+  }
+  function encodeSetDataForTokenId(tokenId, valueHex) {
+    const key = LSP4_METADATA_KEY.replace(/^0x/i, '');
+    if (key.length !== 64) throw new Error('LSP4Metadata key must be 32 bytes');
+    const value = String(valueHex).replace(/^0x/i, '').toLowerCase();
+    if (!value || value.length % 2) throw new Error('metadata value must be even hex');
+    const valueBytes = value.length / 2;
+    const padBytes = (32 - (valueBytes % 32)) % 32;
+    const head = SEL.setDataForTokenId.replace(/^0x/i, '')
+      + BigInt(tokenId).toString(16).padStart(64, '0')
+      + key
+      + '60'.padStart(64, '0')
+      + BigInt(valueBytes).toString(16).padStart(64, '0');
+    return '0x' + head + value + '0'.repeat(padBytes * 2);
+  }
+  function decodeAbiBytes(hex) {
+    if (hex == null) return new Uint8Array();
+    let h = String(hex).toLowerCase();
+    if (h.startsWith('0x')) h = h.slice(2);
+    if (!h || /^0+$/.test(h)) return new Uint8Array();
+    if (h.length < 64) throw new Error('short ABI bytes');
+    const offsetBytes = Number.parseInt(h.slice(0, 64), 16);
+    if (!Number.isFinite(offsetBytes)) throw new Error('bad ABI offset');
+    const offset = offsetBytes * 2;
+    if (h.length < offset + 64) throw new Error('truncated ABI bytes');
+    const len = Number.parseInt(h.slice(offset, offset + 64), 16);
+    if (!Number.isFinite(len) || len < 0) throw new Error('bad ABI length');
+    if (len === 0) return new Uint8Array();
+    const start = offset + 64;
+    if (h.length < start + len * 2) throw new Error('truncated ABI bytes');
+    const out = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      const byte = Number.parseInt(h.slice(start + i * 2, start + i * 2 + 2), 16);
+      if (!Number.isFinite(byte)) throw new Error('bad ABI data');
+      out[i] = byte;
+    }
+    return out;
+  }
+  // null when the token has no override yet. Throws when bytes are present but not data-JSON,
+  // so the tool stops instead of replacing metadata it cannot read.
+  function tryDecodeStoredMetadata(callResultHex) {
+    const bytes = decodeAbiBytes(callResultHex);
+    if (bytes.length === 0) return null;
+    const v = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    let urlHex;
+    if (v.startsWith('0000')) {
+      const hashLen = Number.parseInt(v.slice(12, 16), 16);
+      if (!Number.isFinite(hashLen)) throw new Error('bad VerifiableURI hash length');
+      const urlStart = 16 + hashLen * 2;
+      if (v.length < urlStart) throw new Error('truncated VerifiableURI');
+      urlHex = v.slice(urlStart);
+    } else if (v.length >= 8 + 64) {
+      urlHex = v.slice(8 + 64);
+    } else {
+      throw new Error('Stored LSP4 metadata is not a VerifiableURI');
+    }
+    if (urlHex.length % 2) throw new Error('odd url hex');
+    const urlBytes = new Uint8Array(urlHex.length / 2);
+    for (let i = 0; i < urlBytes.length; i++) urlBytes[i] = Number.parseInt(urlHex.slice(i * 2, i * 2 + 2), 16);
+    const url = new TextDecoder().decode(urlBytes);
+    if (!url.startsWith('data:')) throw new Error('Stored LSP4 metadata URL is not a data JSON');
+    const comma = url.indexOf(',');
+    if (comma < 0) throw new Error('bad data URL');
+    const json = /;base64/i.test(url.slice(0, comma)) ? utf8FromBase64(url.slice(comma + 1)) : decodeURIComponent(url.slice(comma + 1));
+    const metadata = JSON.parse(json);
+    if (!metadata || typeof metadata !== 'object') throw new Error('LSP4 JSON is not an object');
+    return metadata;
+  }
+  function fixGuard(account) {
+    if (!account) return 'Connect to fix metadata.';
+    if (String(account).toLowerCase() !== OWNER.toLowerCase()) return 'Only the contract owner can fix metadata.';
+    return '';
+  }
+  function idleNote(minted) {
+    return `Points icon and images at the 2400px file for ${minted} tokens. ${LIMITATION}`;
+  }
+  function resultMessage({ updated = [], skipped = [], minted, cancelledAt, failedAt } = {}) {
+    const up = updated.length;
+    const sk = skipped.length;
+    if (cancelledAt != null) return `Cancelled at token ${cancelledAt}. Updated ${up}, skipped ${sk}. Run again to continue. ${LIMITATION}`;
+    if (failedAt != null) return `Stopped at token ${failedAt}. Updated ${up}, skipped ${sk}. Run again to continue. ${LIMITATION}`;
+    if (!up) return `All ${minted} tokens already use the 2400px file. Nothing to sign. ${LIMITATION}`;
+    return `Updated ${up} ${up === 1 ? 'token' : 'tokens'} (${updated.join(', ')}). Skipped ${sk} already on the 2400px file. ${LIMITATION}`;
+  }
+  return {
+    OWNER, LSP4_METADATA_KEY, VERIFIABLE_URI_PREFIX, SEL, SIZE, LIMITATION,
+    originalUrl, isAlreadyCorrect, has600Image, withOriginalImages, fallbackMetadata,
+    assertImageFields2400, decideToken, encodeVerifiableURI, encodeSetDataForTokenId,
+    decodeAbiBytes, tryDecodeStoredMetadata, fixGuard, idleNote, resultMessage,
+  };
+})();
+globalThis.GGUeFix = GGUeFix;
+
 (() => {
   const C = GG_NETS[GG_NET];
   const box = document.getElementById('gg');
@@ -39,11 +238,12 @@ const GG_NETS = {
 
   const MAX_QTY = 5;
   const TIER_SIZE = 100; // contract: price doubles every 100 (priceFor = BASE_PRICE << (n-1)/100)
-  const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1'; // contract owner (Mark)
-  const LSP4_METADATA_KEY = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e'; // LSP4Metadata key (32 bytes)
+  const OWNER = GGUeFix.OWNER; // contract owner (Mark). Never the 0x7070 address.
+  const LSP4_METADATA_KEY = GGUeFix.LSP4_METADATA_KEY; // LSP4Metadata key (32 bytes)
   const SEL = { minted: '0x4f02c420', max: '0x32cb6b0c', price: '0x9d1b464a', base: '0xf86325ed', priceFor: '0x8d5555f2',
     script: '0xebe9eb9f', mint: '0x1249c58b', seedOf: '0x82829f74', withdraw: '0x51cff8d9',
-    tokenMetadataJSON: '0xdd36d1d2', imageBaseURI: '0x77645839', setDataForTokenId: '0xd6c1407c' };
+    tokenMetadataJSON: GGUeFix.SEL.tokenMetadataJSON, imageBaseURI: GGUeFix.SEL.imageBaseURI,
+    setDataForTokenId: GGUeFix.SEL.setDataForTokenId, getDataForTokenId: GGUeFix.SEL.getDataForTokenId };
   const ERR = { '0x52df9fe5': 'sold out', '0x6871963e': 'price changed' }; // SoldOut(), WrongPrice(uint256,uint256)
   const MINTED_TOPIC = '0x5a3358a3d27a5373c0df2604662088d37894d56b7cfd27f315770440f4e0d919';
   const P5 = 'https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js';
@@ -154,7 +354,7 @@ const GG_NETS = {
       fixBtn.hidden = !canMint || !isOwner;
       fixBtn.disabled = st.fixBusy || !hasMinted;
       fixBtn.textContent = st.fixBusy ? (st.fixProgress || 'Updating…') : hasMinted ? 'Fix images for UE' : 'No tokens yet';
-      fixNote.innerHTML = st.fixMsg || (isOwner && hasMinted && !st.fixBusy ? `Sets icon=600, images=2400 for ${st.minted} tokens` : '');
+      fixNote.innerHTML = st.fixMsg || (isOwner && hasMinted && !st.fixBusy ? esc(GGUeFix.idleNote(st.minted)) : '');
     }
   }
 
@@ -336,112 +536,95 @@ const GG_NETS = {
     }
   }
 
-  // Fix token metadata for UE: set icon=[600] and images=[[2400]] via setDataForTokenId
+  // Per-token LSP4 override wins in Universal Everything. tokenMetadataJSON() is the contract's
+  // computed metadata and still describes the original images; this does not change future mints.
+  async function readEffectiveMetadata(n) {
+    const raw = await call(SEL.getDataForTokenId + pad(n) + LSP4_METADATA_KEY.slice(2));
+    const override = GGUeFix.tryDecodeStoredMetadata(raw);
+    if (override) return override;
+    const computed = decodeString(await call(SEL.tokenMetadataJSON + pad(n)));
+    if (!computed) return null;
+    return JSON.parse(computed);
+  }
+
+  // Point icon and images at the 2400 original. Skip tokens whose stored override is already that.
   async function fixImagesForUE() {
     if (st.fixBusy) return;
-    if (!keccak256) { st.fixMsg = 'Loading keccak256…'; render(); setTimeout(fixImagesForUE, 500); return; }
+    if (!keccak256) { st.fixMsg = esc('Loading keccak256…'); render(); setTimeout(fixImagesForUE, 500); return; }
     const pv = st.provider;
     const acc = st.account;
-    if (!acc) { st.fixMsg = 'Connect to fix metadata.'; render(); return; }
-    if (acc.toLowerCase() !== OWNER.toLowerCase()) { 
-      st.fixMsg = 'Only the contract owner can fix metadata.'; 
-      render(); 
-      return; 
-    }
+    const denied = GGUeFix.fixGuard(acc);
+    if (denied) { st.fixMsg = esc(denied); render(); return; }
     st.fixBusy = true; st.fixMsg = ''; st.fixProgress = ''; render();
+    const updated = [];
+    const skipped = [];
+    let current = 0;
+    const report = (extra) => esc(GGUeFix.resultMessage(extra));
+    const txLink = (hash) => /^0x[0-9a-fA-F]{64}$/.test(hash || '')
+      ? ` <a href="${esc(C.explorer)}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>` : '';
     try {
-      if (!(await ensureChain(pv))) { st.fixMsg = `Switch to ${C.name} to fix metadata.`; return; }
-      
-      // Get minted count and imageBaseURI
+      if (!(await ensureChain(pv))) { st.fixMsg = esc(`Switch to ${C.name} to fix metadata.`); return; }
       const [mintedHex, baseURIHex] = await rpcBatch([
         ['eth_call', [{ to: C.address, data: SEL.minted }, 'latest']],
         ['eth_call', [{ to: C.address, data: SEL.imageBaseURI }, 'latest']]
       ]);
       const minted = Number(BigInt(mintedHex));
       const baseURI = decodeString(baseURIHex);
-      
-      if (minted === 0) { st.fixMsg = 'No tokens minted yet.'; return; }
-      
-      st.fixProgress = `Preparing metadata for ${minted} tokens…`; render();
-      
-      // For each token, build corrected metadata and encode properly
+      if (minted === 0) { st.fixMsg = esc('No tokens minted yet.'); return; }
+
       for (let n = 1; n <= minted; n++) {
-        st.fixProgress = `Preparing token ${n} of ${minted}…`; render();
-        
-        // Get seed
-        const seedHex = await call(SEL.seedOf + pad(n));
-        const seed = Number(BigInt(seedHex));
-        
-        // Build corrected metadata JSON (match contract structure exactly)
-        const metadata = {
-          LSP4Metadata: {
-            name: `Generative Square #${n}`,
-            description: 'One square, its own seed. Script and seed live on-chain.',
-            links: [],
-            icon: [{ width: 600, height: 600, url: `${baseURI}${n}-600.png` }],
-            images: [[{ width: 2400, height: 2400, url: `${baseURI}${n}.png` }]],
-            assets: [],
-            attributes: [{ key: 'Seed', value: seed, type: 'number' }]
-          }
-        };
-        
-        const jsonStr = JSON.stringify(metadata);
-        const jsonBytes = new TextEncoder().encode(jsonStr);
-        
-        // Encode as VerifiableURI matching contract: 0x00008019f9b10020 + keccak256(json) + dataURL
-        const jsonHash = keccak256(jsonBytes).slice(2); // remove 0x
-        const dataURL = 'data:application/json;base64,' + btoa(jsonStr);
-        const dataURLBytes = new TextEncoder().encode(dataURL);
-        const dataURLHex = Array.from(dataURLBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        const value = '0x00008019f9b10020' + jsonHash + dataURLHex;
-        
-        // ABI encode setDataForTokenId(bytes32 tokenId, bytes32 dataKey, bytes value)
-        const tokenIdPadded = pad(n);
-        const dataKey = LSP4_METADATA_KEY.slice(2);
-        const valueBytes = (value.length - 2) / 2;
-        const valuePadding = valueBytes % 32 === 0 ? '' : '0'.repeat((32 - valueBytes % 32) * 2);
-        
-        const data = SEL.setDataForTokenId + 
-          tokenIdPadded + // bytes32 tokenId
-          dataKey + // bytes32 dataKey
-          '0000000000000000000000000000000000000000000000000000000000000060' + // bytes value offset (3*32)
-          hex(valueBytes).slice(2).padStart(64, '0') + // bytes value length
-          value.slice(2) + valuePadding; // bytes value data + padding
-        
+        current = n;
+        st.fixProgress = `Reading token ${n} of ${minted}…`; render();
+        let existing;
+        try { existing = await readEffectiveMetadata(n); }
+        catch (e) {
+          st.fixMsg = report({ updated, skipped, minted, failedAt: n }) + ' ' + esc(e?.message || 'could not read metadata');
+          return;
+        }
+        let decision = GGUeFix.decideToken(existing, baseURI, n);
+        if (decision.action === 'need-seed') {
+          const seed = Number(BigInt(await call(SEL.seedOf + pad(n))));
+          decision = GGUeFix.decideToken(null, baseURI, n, seed);
+        }
+        if (decision.action === 'skip') {
+          skipped.push(n);
+          st.fixProgress = `Token ${n} of ${minted} already 2400, skipping…`; render();
+          continue;
+        }
+        const jsonStr = JSON.stringify(decision.metadata);
+        const data = GGUeFix.encodeSetDataForTokenId(n, GGUeFix.encodeVerifiableURI(jsonStr, keccak256));
         st.fixProgress = `Updating token ${n} of ${minted}…`; render();
-        
         const tx = { from: acc, to: C.address, value: '0x0', data };
-        
-        // Dry run first
-        try { 
-          await rpc('eth_call', [tx, 'latest']); 
-        } catch (e) {
-          st.fixMsg = `Dry run failed at token ${n}: ${e?.message || 'contract reverted'}`;
+        try { await rpc('eth_call', [tx, 'latest']); }
+        catch (e) {
           console.warn('Dry run error:', e);
+          st.fixMsg = report({ updated, skipped, minted, failedAt: n }) + ' ' + esc(e?.message || 'contract reverted');
           return;
         }
-        
         let txHash;
-        try { 
-          txHash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); 
-        } catch (e) {
-          if (e?.code === 4001) { st.fixMsg = `Cancelled at token ${n}.`; return; }
-          st.fixMsg = `Failed to send transaction for token ${n}.`;
+        try { txHash = await pv.request({ method: 'eth_sendTransaction', params: [tx] }); }
+        catch (e) {
+          st.fixMsg = e?.code === 4001
+            ? report({ updated, skipped, minted, cancelledAt: n })
+            : report({ updated, skipped, minted, failedAt: n });
           return;
         }
-        
         st.fixProgress = `Confirming token ${n} of ${minted}…`; render();
         const rc = await waitReceipt(txHash);
         if (!rc || rc.status !== '0x1') {
-          st.fixMsg = `Failed at token ${n} · <a href="${C.explorer}/tx/${txHash}" target="_blank" rel="noopener">view ↗</a>`;
+          st.fixMsg = report({ updated, skipped, minted, failedAt: n }) + txLink(txHash);
           return;
         }
+        updated.push(n);
       }
-      
-      st.fixMsg = `Fixed ${minted} tokens! New mints still get old metadata until you run Fix again.`;
+      st.fixMsg = report({ updated, skipped, minted });
     } catch (e) {
       console.warn(e);
-      st.fixMsg = 'Fix failed: ' + (e?.message || 'unknown error');
+      if (!st.fixMsg) {
+        st.fixMsg = current
+          ? report({ updated, skipped, failedAt: current }) + ' ' + esc(e?.message || 'unknown error')
+          : esc('Fix failed: ' + (e?.message || 'unknown error'));
+      }
     } finally {
       st.fixBusy = false;
       st.fixProgress = '';

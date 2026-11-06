@@ -50,7 +50,11 @@ Generative Grid (tip-the-creator block, `grid-ad.js`):
 - Inside the LUKSO Grid it mints via up-provider; in a normal browser via the Universal Profile extension
   (EIP-6963, `window.lukso`, fallback `window.ethereum`), switching/adding LUKSO Testnet (4201) when needed.
 - `?gg=<number>` shows that minted piece in the preview.
-- Token images: the contract (v3) returns per-token LSP4Metadata on-chain (a data: JSON with the seed) whose images
-  point to `gg/<chainId>/<n>.png` (2400 px) and `<n>-600.png`. `scripts/build-gg.mjs` renders those with the
-  on-chain script + seed in headless Chrome (same HTML as the preview); the Pages workflow runs it every 15 minutes
-  and only deploys when there are new mints.
+- Token images: the contract's computed `tokenMetadataJSON` is immutable. It still points at `gg/<chainId>/<n>.png`
+  (2400 px) and `<n>-600.png`. `scripts/build-gg.mjs` renders both with the on-chain script + seed in headless Chrome
+  (same HTML as the preview); the Pages workflow runs it every 15 minutes and only deploys when there are new mints.
+  The 600 px files stay on the site for that computed metadata.
+- Universal Everything follows the per-token LSP4 override (`getDataForTokenId`), not the computed JSON, when an
+  override is set. The owner-only "Fix images for UE" button writes that override so both `icon` and `images` are the
+  2400 px file. It skips tokens that already store that override. A new mint still gets the contract's computed
+  metadata until the owner runs the button again. The button never changes price, supply, or ownership.
