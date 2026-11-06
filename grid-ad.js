@@ -217,6 +217,189 @@ const GGUeFix = (() => {
 })();
 globalThis.GGUeFix = GGUeFix;
 
+// Owner-only collection header. One setData of LSP4Metadata, and only the banner
+// approved in the merged header (ff6bf44 / merge 0360485). It does not write token
+// metadata, name, symbol, price, seeds, or ownership.
+const GGCollectionHeader = (() => {
+  const OWNER = '0x52224e802f722a3f3f1de8b2157597ae7fefffd1';
+  const NEVER = '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd';
+  const CHAIN_ID = 42;
+  const CONTRACT = '0x33dd4d3da812e2cc1b3692456470dfdd99659e62';
+  const LSP4_METADATA_KEY = '0x9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e';
+  const GET_DATA = '0x54f6127f'; // getData(bytes32)
+  const SET_DATA = '0x7f23690c'; // setData(bytes32,bytes)
+  const APPROVED_VALUE = '0x00008019f9b10020ed48b440a5fd04f2e8b547ef62f96c313ca146460d9a3ff202bd38d371266170646174613a6170706c69636174696f6e2f6a736f6e3b6261736536342c65794a4d553141305457563059575268644745694f6e7369626d46745a534936496b646c626d567959585270646d55675533463159584a6c496977695a47567a59334a7063485270623234694f694a50626d55676333463159584a6c4c43427064484d676233647549484e6c5a57517549464e6a636d6c7764434268626d51676332566c5a43427361585a6c494739754c574e6f59576c754c694973496d7870626d747a496a70625853776961574e76626949365733736964326c6b644767694f6a63794d444173496d686c6157646f644349364d6a51774d43776964584a73496a6f696148523063484d364c7939746157357062574673626d77755a326c30614856694c6d6c764c334e30615778735a53316d5a57566b4c324e766247786c59335270623234765a3256755a584a6864476c325a53317a63585668636d5574614756685a4756794c6e42755a794a394c48736964326c6b644767694f6a45344d444173496d686c6157646f644349364e6a41774c434a31636d77694f694a6f64485277637a6f764c323170626d6c74595778756243356e6158526f6457497561573876633352706247786c4c575a6c5a575176593239736247566a64476c766269396e5a57356c636d463061585a6c4c584e78645746795a53316f5a57466b5a5849744d5467774d433577626d636966563073496d6c745957646c6379493657317437496e64705a48526f496a6f334d6a41774c434a6f5a576c6e614851694f6a49304d444173496e567962434936496d68306448427a4f69387662576c7561573168624735734c6d647064476831596935706279397a64476c73624755745a6d566c5a43396a623278735a574e30615739754c32646c626d567959585270646d55746333463159584a6c4c57686c5957526c63693577626d636966537837496e64705a48526f496a6f784f4441774c434a6f5a576c6e614851694f6a59774d43776964584a73496a6f696148523063484d364c7939746157357062574673626d77755a326c30614856694c6d6c764c334e30615778735a53316d5a57566b4c324e766247786c59335270623234765a3256755a584a6864476c325a53317a63585668636d5574614756685a4756794c5445344d4441756347356e496e31645853776959584e7a5a58527a496a70625853776959585230636d6c696458526c637949365731313966513d3d';
+  const APPROVED_CALLDATA = '0x7f23690c9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000003b100008019f9b10020ed48b440a5fd04f2e8b547ef62f96c313ca146460d9a3ff202bd38d371266170646174613a6170706c69636174696f6e2f6a736f6e3b6261736536342c65794a4d553141305457563059575268644745694f6e7369626d46745a534936496b646c626d567959585270646d55675533463159584a6c496977695a47567a59334a7063485270623234694f694a50626d55676333463159584a6c4c43427064484d676233647549484e6c5a57517549464e6a636d6c7764434268626d51676332566c5a43427361585a6c494739754c574e6f59576c754c694973496d7870626d747a496a70625853776961574e76626949365733736964326c6b644767694f6a63794d444173496d686c6157646f644349364d6a51774d43776964584a73496a6f696148523063484d364c7939746157357062574673626d77755a326c30614856694c6d6c764c334e30615778735a53316d5a57566b4c324e766247786c59335270623234765a3256755a584a6864476c325a53317a63585668636d5574614756685a4756794c6e42755a794a394c48736964326c6b644767694f6a45344d444173496d686c6157646f644349364e6a41774c434a31636d77694f694a6f64485277637a6f764c323170626d6c74595778756243356e6158526f6457497561573876633352706247786c4c575a6c5a575176593239736247566a64476c766269396e5a57356c636d463061585a6c4c584e78645746795a53316f5a57466b5a5849744d5467774d433577626d636966563073496d6c745957646c6379493657317437496e64705a48526f496a6f334d6a41774c434a6f5a576c6e614851694f6a49304d444173496e567962434936496d68306448427a4f69387662576c7561573168624735734c6d647064476831596935706279397a64476c73624755745a6d566c5a43396a623278735a574e30615739754c32646c626d567959585270646d55746333463159584a6c4c57686c5957526c63693577626d636966537837496e64705a48526f496a6f784f4441774c434a6f5a576c6e614851694f6a59774d43776964584a73496a6f696148523063484d364c7939746157357062574673626d77755a326c30614856694c6d6c764c334e30615778735a53316d5a57566b4c324e766247786c59335270623234765a3256755a584a6864476c325a53317a63585668636d5574614756685a4756794c5445344d4441756347356e496e31645853776959584e7a5a58527a496a70625853776959585230636d6c696458526c637949365731313966513d3d000000000000000000000000000000';
+  const ARTWORK = [
+    { url: 'https://minimalnl.github.io/stille-feed/collection/generative-square-header.png', width: 7200, height: 2400, sha256: '932450b224f16801c3917b92b2ecbbf9a6148a327508bac43b29d2b496d9a678' },
+    { url: 'https://minimalnl.github.io/stille-feed/collection/generative-square-header-1800.png', width: 1800, height: 600, sha256: '2a30af729d519db15bd365c05bac8d1da11a67c18edfec7880857fe81104868e' },
+  ];
+  const MSG = {
+    connect: 'Connect the owner profile to set the collection header.',
+    owner: 'Only the contract owner can set the collection header.',
+    chain: 'Switch to LUKSO mainnet (chain 42) before setting the header.',
+    contract: 'This header update is only for the Generative Square contract on LUKSO mainnet.',
+    skip: 'The collection header is already the approved banner. Nothing to sign.',
+    review: 'Collection metadata is not the approved header. Stopped so nothing else in that field is overwritten. Nothing was signed.',
+    unavailable: 'The approved banner is not available at its public URL yet. Nothing was signed.',
+    mismatch: 'The public banner file is not the approved image. Stopped for review. Nothing was signed.',
+    readFail: 'Could not read the collection metadata. Nothing was signed.',
+    revert: 'The contract rejected the header update. Nothing was signed.',
+    cancel: 'Cancelled. Nothing was signed.',
+    sendFail: 'The wallet did not send the transaction. Nothing was signed.',
+    busy: 'Already checking the header.',
+    idle: 'One confirmation sets the approved three-square banner. Token images stay as they are.',
+  };
+
+  function hexToBytes(hex) {
+    const h = String(hex == null ? '' : hex).replace(/^0x/i, '').toLowerCase();
+    if (!h) return new Uint8Array();
+    if (h.length % 2 || /[^0-9a-f]/.test(h)) {
+      const error = new Error('unreadable metadata');
+      error.review = true;
+      throw error;
+    }
+    const out = new Uint8Array(h.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(h.slice(i * 2, i * 2 + 2), 16);
+    return out;
+  }
+  const APPROVED_BYTES = hexToBytes(APPROVED_VALUE);
+
+  function asBytes(stored) {
+    if (stored == null) return new Uint8Array();
+    if (typeof stored === 'string') return hexToBytes(stored);
+    if (typeof stored.length === 'number') {
+      const out = new Uint8Array(stored.length);
+      for (let i = 0; i < stored.length; i++) out[i] = stored[i];
+      return out;
+    }
+    const error = new Error('unreadable metadata');
+    error.review = true;
+    throw error;
+  }
+  function sameBytes(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if ((a[i] & 255) !== (b[i] & 255)) return false;
+    return true;
+  }
+  function guard(account, chainId, contract) {
+    const acc = String(account || '').toLowerCase();
+    if (!acc) return MSG.connect;
+    if (acc === NEVER.toLowerCase()) return MSG.owner;
+    if (acc !== OWNER.toLowerCase()) return MSG.owner;
+    if (Number(chainId) !== CHAIN_ID) return MSG.chain;
+    if (String(contract || '').toLowerCase() !== CONTRACT) return MSG.contract;
+    return '';
+  }
+  function decide(stored) {
+    const bytes = asBytes(stored);
+    if (bytes.length === 0) return { action: 'update' };
+    if (sameBytes(bytes, APPROVED_BYTES)) return { action: 'skip' };
+    return { action: 'review' };
+  }
+  function pngSize(bytes) {
+    const u8 = asBytes(bytes);
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (u8.length < 24) return null;
+    for (let i = 0; i < 8; i++) if (u8[i] !== sig[i]) return null;
+    if (String.fromCharCode(u8[12], u8[13], u8[14], u8[15]) !== 'IHDR') return null;
+    const width = ((u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19]) >>> 0;
+    const height = ((u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]) >>> 0;
+    return { width, height };
+  }
+  async function sha256Hex(bytes) {
+    const digest = await crypto.subtle.digest('SHA-256', asBytes(bytes));
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  async function checkArtwork(fetchImpl) {
+    let mismatch = false;
+    let unavailable = false;
+    for (const art of ARTWORK) {
+      let res;
+      try { res = await fetchImpl(art.url, { cache: 'no-store' }); }
+      catch { unavailable = true; continue; }
+      if (!res || !res.ok) { unavailable = true; continue; }
+      const buf = new Uint8Array(await res.arrayBuffer());
+      const size = pngSize(buf);
+      const hash = await sha256Hex(buf);
+      if (!size || size.width !== art.width || size.height !== art.height || hash !== art.sha256) mismatch = true;
+    }
+    if (mismatch) return { ok: false, reason: 'mismatch', message: MSG.mismatch };
+    if (unavailable) return { ok: false, reason: 'unavailable', message: MSG.unavailable };
+    return { ok: true };
+  }
+  function isCancel(error) {
+    return error?.code === 4001 || /reject|denied|cancel/i.test(error?.message || '');
+  }
+  function approvedCalldata() {
+    const data = APPROVED_CALLDATA.toLowerCase();
+    if (!data.startsWith(SET_DATA) || !data.includes(LSP4_METADATA_KEY.slice(2))) {
+      throw new Error('approved header calldata is not setData of LSP4Metadata');
+    }
+    return APPROVED_CALLDATA;
+  }
+  async function run(deps) {
+    const account = typeof deps.account === 'function' ? await deps.account() : deps.account;
+    const chainId = typeof deps.chainId === 'function' ? await deps.chainId() : deps.chainId;
+    const contract = typeof deps.contract === 'function' ? await deps.contract() : deps.contract;
+    const denied = guard(account, chainId, contract);
+    if (denied) return { status: 'blocked', message: denied, sent: false };
+    let stored;
+    try { stored = await deps.readStored(); }
+    catch (error) {
+      if (error?.review) return { status: 'review', message: MSG.review, sent: false };
+      return { status: 'blocked', message: MSG.readFail, sent: false };
+    }
+    let decision;
+    try { decision = decide(stored); }
+    catch (error) {
+      if (error?.review) return { status: 'review', message: MSG.review, sent: false };
+      throw error;
+    }
+    if (decision.action === 'skip') return { status: 'skipped', message: MSG.skip, sent: false };
+    if (decision.action !== 'update') return { status: 'review', message: MSG.review, sent: false };
+    const art = await deps.checkArtwork();
+    if (!art?.ok) {
+      const review = art?.reason === 'mismatch';
+      return { status: review ? 'review' : 'blocked', message: art?.message || MSG.unavailable, sent: false };
+    }
+    const data = approvedCalldata();
+    try { await deps.dryRun(data, account); }
+    catch { return { status: 'reverted', message: MSG.revert, sent: false }; }
+    try {
+      const hash = await deps.send(data, account);
+      if (!/^0x[0-9a-fA-F]{64}$/.test(hash || '')) return { status: 'failed', message: MSG.sendFail, sent: false };
+      return { status: 'sent', hash, sent: true, data };
+    } catch (error) {
+      if (isCancel(error)) return { status: 'cancelled', message: MSG.cancel, sent: false };
+      return { status: 'failed', message: MSG.sendFail, sent: false };
+    }
+  }
+  function createClick(deps) {
+    let busy = false;
+    return async function click() {
+      if (busy) return { status: 'busy', message: MSG.busy, sent: false };
+      busy = true;
+      try { return await run(deps); }
+      finally { busy = false; }
+    };
+  }
+  function storedBytes(callResultHex) {
+    try { return GGUeFix.decodeAbiBytes(callResultHex); }
+    catch (error) { error.review = true; throw error; }
+  }
+  function getDataCalldata() {
+    return GET_DATA + LSP4_METADATA_KEY.slice(2);
+  }
+  return {
+    OWNER, NEVER, CHAIN_ID, CONTRACT, LSP4_METADATA_KEY, GET_DATA, SET_DATA,
+    APPROVED_VALUE, APPROVED_CALLDATA, ARTWORK, MSG,
+    guard, decide, pngSize, sha256Hex, checkArtwork, run, createClick, storedBytes, getDataCalldata,
+  };
+})();
+globalThis.GGCollectionHeader = GGCollectionHeader;
+
+
 (() => {
   const C = GG_NETS[GG_NET];
   const box = document.getElementById('gg');
@@ -251,7 +434,7 @@ globalThis.GGUeFix = GGUeFix;
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
   const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null, wallets: [], wallet: null,
-    busy: false, msg: '', progress: '', useUpProvider: false, contractBalance: null, claimBusy: false, claimMsg: '', fixBusy: false, fixMsg: '', fixProgress: '' };
+    busy: false, msg: '', progress: '', useUpProvider: false, contractBalance: null, claimBusy: false, claimMsg: '', fixBusy: false, fixMsg: '', fixProgress: '', headerBusy: false, headerMsg: '' };
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
   const hexChain = '0x' + C.chainId.toString(16);
@@ -355,6 +538,15 @@ globalThis.GGUeFix = GGUeFix;
       fixBtn.disabled = st.fixBusy || !hasMinted;
       fixBtn.textContent = st.fixBusy ? (st.fixProgress || 'Updating…') : hasMinted ? 'Fix images for UE' : 'No tokens yet';
       fixNote.innerHTML = st.fixMsg || (isOwner && hasMinted && !st.fixBusy ? esc(GGUeFix.idleNote(st.minted)) : '');
+    }
+
+    const headerBtn = el('ggHeader');
+    const headerNote = el('ggHeaderNote');
+    if (headerBtn && headerNote) {
+      headerBtn.hidden = !canMint || !isOwner;
+      headerBtn.disabled = st.headerBusy;
+      headerBtn.textContent = st.headerBusy ? 'Checking header…' : 'Set collection header';
+      headerNote.innerHTML = st.headerMsg || (isOwner && !st.headerBusy ? esc(GGCollectionHeader.MSG.idle) : '');
     }
   }
 
@@ -632,6 +824,55 @@ globalThis.GGUeFix = GGUeFix;
     }
   }
 
+  async function readChainId(pv) {
+    if (!pv) return 0;
+    try {
+      if (inGrid && Number(pv.chainId) > 0) return Number(pv.chainId);
+      return Number(await pv.request({ method: 'eth_chainId', params: [] }));
+    } catch { return 0; }
+  }
+
+  // Click path for the approved collection header. The wallet is asked only after
+  // the owner, chain, stored metadata, artwork, and a read-only eth_call all pass.
+  const headerClick = GGCollectionHeader.createClick({
+    account: () => st.account,
+    chainId: () => readChainId(st.provider),
+    contract: () => C.address,
+    readStored: async () => {
+      const raw = await call(GGCollectionHeader.getDataCalldata());
+      return GGCollectionHeader.storedBytes(raw);
+    },
+    checkArtwork: () => GGCollectionHeader.checkArtwork(fetch),
+    dryRun: (data, account) => rpc('eth_call', [{ from: account, to: GGCollectionHeader.CONTRACT, value: '0x0', data }, 'latest']),
+    send: (data, account) => st.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ from: account, to: GGCollectionHeader.CONTRACT, value: '0x0', data }],
+    }),
+  });
+
+  async function setCollectionHeader() {
+    if (st.headerBusy) return;
+    st.headerBusy = true; st.headerMsg = ''; render();
+    const txLink = (hash) => /^0x[0-9a-fA-F]{64}$/.test(hash || '')
+      ? ` <a href="${esc(C.explorer)}/tx/${hash}" target="_blank" rel="noopener">view ↗</a>` : '';
+    try {
+      const result = await headerClick();
+      if (result.status !== 'sent') { st.headerMsg = esc(result.message || GGCollectionHeader.MSG.sendFail); return; }
+      st.headerMsg = 'Confirming…'; render();
+      const rc = await waitReceipt(result.hash);
+      if (!rc) { st.headerMsg = 'Waiting for the transaction.' + txLink(result.hash); return; }
+      st.headerMsg = rc.status === '0x1'
+        ? 'Collection header set.' + txLink(result.hash)
+        : 'The header transaction failed.' + txLink(result.hash);
+    } catch (e) {
+      console.warn(e);
+      if (!st.headerMsg) st.headerMsg = esc(GGCollectionHeader.MSG.sendFail);
+    } finally {
+      st.headerBusy = false;
+      render();
+    }
+  }
+
   async function connect(picked) {
     if (st.busy) return;
     if (!picked && st.wallets.length > 1 && !st.useUpProvider) { st.msg = ''; render(); showPicker(); return; }
@@ -778,6 +1019,8 @@ globalThis.GGUeFix = GGUeFix;
   if (claimBtn) claimBtn.onclick = () => claimRevenue();
   const fixBtn = el('ggFix');
   if (fixBtn) fixBtn.onclick = () => fixImagesForUE();
+  const headerBtn = el('ggHeader');
+  if (headerBtn) headerBtn.onclick = () => setCollectionHeader();
 
   // Nothing of this block loads (no RPC, no p5) until the visitor scrolls near the bottom.
   let started = false;

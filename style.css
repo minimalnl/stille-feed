@@ -129,6 +129,7 @@ body.chrome-off .chrome-toggle{margin-top:-40px}
 .gg-claim-note{margin:6px 0 0;font-size:11px;color:var(--muted);min-height:1em}
 .gg-claim-note:empty{display:none}
 .gg-claim-note a{color:var(--sage-d)}
+.gg-claim-note + .gg-claim-btn{margin-top:12px}
 @media (max-width:560px){
   .gg{flex-direction:column;align-items:stretch;text-align:center;padding:16px;gap:14px;margin-top:48px}
   .gg-art{width:100%;max-width:280px;margin:0 auto}
