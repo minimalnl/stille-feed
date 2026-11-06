@@ -6,6 +6,7 @@ import test from 'node:test';
 import { ethers } from 'ethers';
 import { keccak_256 } from '@noble/hashes/sha3';
 import { loadGGUeFix } from './gg-ue-load.mjs';
+import { ethCallForDecision, simulationReportOk } from './gg-ue-fix.simulate.mjs';
 
 const GGUeFix = loadGGUeFix();
 const BASE = 'https://minimalnl.github.io/stille-feed/gg/42/';
@@ -217,4 +218,23 @@ test('user-facing copy describes 2400 for both fields and the computed-metadata 
   assert.doesNotMatch(SOURCE, /icon=600/);
   assert.doesNotMatch(SOURCE, /\$\{baseURI\}\$\{[^}]+\}-600\.png/);
   assert.doesNotMatch(SOURCE, /width:\s*600,\s*height:\s*600/);
+});
+
+test('simulation report accepts all-skipped and mixed updated+skipped runs', () => {
+  assert.equal(ethCallForDecision('skip'), 'skipped');
+  assert.equal(ethCallForDecision('update'), 'update');
+  const skipped = (n) => ({ n, ethCall: ethCallForDecision('skip') });
+  const updated = (n) => ({ n, ethCall: { from: GGUeFix.OWNER, ok: true, result: '0x' } });
+  const failed = (n) => ({ n, ethCall: { ok: false, error: 'execution reverted' } });
+  const allSkipped = [skipped(1), skipped(2), skipped(3), skipped(4), skipped(5), skipped(6), skipped(7)];
+  const mixed = [updated(1), skipped(2), updated(3), skipped(4)];
+  assert.equal(simulationReportOk(allSkipped), true);
+  assert.deepEqual(allSkipped.map((token) => token.ethCall), ['skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
+  assert.equal(simulationReportOk(mixed), true);
+  assert.equal(simulationReportOk([updated(1), updated(2)]), true);
+  // The previous check looked for 'skipped' while the row stored decideToken's 'skip'.
+  assert.equal(simulationReportOk([{ n: 1, ethCall: 'skip' }]), false);
+  assert.equal(simulationReportOk([updated(1), { n: 2, ethCall: 'skip' }]), false);
+  assert.equal(simulationReportOk([updated(1), failed(2), skipped(3)]), false);
+  assert.equal(simulationReportOk([{ n: 1, ethCall: { ok: true } }, failed(2)]), false);
 });

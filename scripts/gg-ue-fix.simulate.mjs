@@ -1,8 +1,19 @@
 // Read-only check: build the exact Fix-images calldata and eth_call it as the contract owner.
 // Does not sign, send, or connect a wallet. Run: node scripts/gg-ue-fix.simulate.mjs
+import { pathToFileURL } from 'node:url';
 import { ethers } from 'ethers';
 import { keccak_256 } from '@noble/hashes/sha3';
 import { loadGGUeFix } from './gg-ue-load.mjs';
+
+// decideToken uses action 'skip'. The report status is 'skipped' so a later
+// all-skipped or mixed run still counts as success.
+export function ethCallForDecision(action) {
+  return action === 'skip' ? 'skipped' : action;
+}
+
+export function simulationReportOk(tokens) {
+  return Array.isArray(tokens) && tokens.every((token) => token?.ethCall?.ok === true || token?.ethCall === 'skipped');
+}
 
 const GGUeFix = loadGGUeFix();
 const RPC = 'https://rpc.mainnet.lukso.network';
@@ -37,6 +48,7 @@ async function imageSize(url) {
   return { url, status: res.status, bytes: buf.length, ...size };
 }
 
+export async function simulateReadOnly() {
 const report = { rpc: RPC, contract: ADDR, sentTransaction: false };
 try {
   const [minted, owner, baseURI] = await Promise.all([
@@ -70,7 +82,7 @@ try {
       seed: source?.LSP4Metadata?.attributes ?? null,
     };
     if (decision.action !== 'update') {
-      row.ethCall = decision.action;
+      row.ethCall = ethCallForDecision(decision.action);
       report.tokens.push(row);
       if (decision.action !== 'skip') throw new Error(`token ${n} was not updated or skipped (${decision.action})`);
       continue;
@@ -101,11 +113,19 @@ try {
       throw new Error(`token ${n} image is ${row.image.width}x${row.image.height}`);
     }
   }
-  report.ok = report.tokens.every((t) => t.ethCall?.ok || t.ethCall === 'skipped');
+  report.updated = report.tokens.filter((token) => token.ethCall?.ok === true).map((token) => token.n);
+  report.skipped = report.tokens.filter((token) => token.ethCall === 'skipped').map((token) => token.n);
+  report.ok = simulationReportOk(report.tokens);
 } catch (e) {
   report.ok = false;
   report.error = e?.message || String(e);
 }
+return report;
+}
 
-console.log(JSON.stringify(report, null, 2));
-if (!report.ok) process.exit(1);
+const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  const report = await simulateReadOnly();
+  console.log(JSON.stringify(report, null, 2));
+  if (!report.ok) process.exit(1);
+}
