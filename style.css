@@ -1,12 +1,12 @@
 :root{
   --r:18px;
 }
-/* Kunstobject (default): the current cream-and-sage palette */
+/* Kunstobject (default): neutral gallery surface */
 :root,[data-theme="kunstobject"]{
-  --bg:#fbf7ee; --card:#fffdf8; --sand:#f3e3cc; --sand-2:#ead8bd;
-  --sage:#bfcbb1; --sage-d:#8d9c80; --ink:#4a4f45; --muted:#8a8c82; --line:#ece4d6;
-  --desc:#6b6e63; --hint:#a0775a; --tag:#7d6b52; --gg-sub:#6b6e63;
-  --btn-text:#fff; --gg-new-bg:rgba(255,253,248,.85);
+  --bg:#F6F6F2; --card:#FCFCFA; --sand:#F0F0EC; --sand-2:#E8E8E4;
+  --sage:#B4C3AE; --sage-d:#909C8B; --ink:#3F4841; --muted:#696F6A; --line:#E5E7E1;
+  --desc:#696F6A; --hint:#696F6A; --tag:#696F6A; --gg-sub:#696F6A;
+  --btn-text:#fff; --gg-new-bg:rgba(252,252,250,.85);
   color-scheme:light;
 }
 /* Zwart (dark): match Hup's dark theme */
