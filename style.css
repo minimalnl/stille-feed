@@ -4,9 +4,9 @@
 /* Kunstobject (default): neutral gallery surface */
 :root,[data-theme="kunstobject"]{
   --bg:#F6F6F2; --card:#FCFCFA; --sand:#F0F0EC; --sand-2:#E8E8E4;
-  --sage:#B4C3AE; --sage-d:#909C8B; --ink:#3F4841; --muted:#696F6A; --line:#E5E7E1;
+  --sage:#B4C3AE; --sage-d:#5F7556; --ink:#3F4841; --muted:#696F6A; --line:#E5E7E1;
   --desc:#696F6A; --hint:#696F6A; --tag:#696F6A; --gg-sub:#696F6A;
-  --btn-text:#fff; --gg-new-bg:rgba(252,252,250,.85);
+  --btn-text:#2F3831; --gg-new-bg:rgba(252,252,250,.85);
   color-scheme:light;
 }
 /* Zwart (dark): match Hup's dark theme */
@@ -20,7 +20,7 @@
 /* Wit (light): clean white theme */
 [data-theme="wit"]{
   --bg:#ffffff; --card:#ffffff; --sand:#f5f5f5; --sand-2:#eeeeee;
-  --sage:#bfcbb1; --sage-d:#8d9c80; --ink:#000000; --muted:#666666; --line:#e0e0e0;
+  --sage:#bfcbb1; --sage-d:#5F7556; --ink:#000000; --muted:#666666; --line:#e0e0e0;
   --desc:#333333; --hint:#666666; --tag:#666666; --gg-sub:#333333;
   --btn-text:#fff; --gg-new-bg:rgba(255,255,255,.85);
   color-scheme:light;
@@ -165,4 +165,6 @@ body.chrome-off .chrome-toggle{margin-top:-40px}
 @media (max-width:560px){
   .theme-switch{bottom:16px;right:16px;font-size:11px}
   .theme-switch button{padding:5px 12px}
+  /* Add bottom space so switcher doesn't cover footer content */
+  .foot{padding-bottom:60px}
 }

@@ -16,21 +16,21 @@
   const DEFAULT_THEME = 'kunstobject';
   const IN_FRAME = window.parent !== window;
 
-  // Read theme from localStorage, URL parameter, or default (in that order)
+  // Read theme from URL parameter (explicit), localStorage (saved), or default (in that order)
   function getSavedTheme() {
-    // Try localStorage first
+    // Check URL parameter first — an explicit ?theme= should override saved preference
+    try {
+      const urlTheme = new URLSearchParams(location.search).get('theme');
+      if (urlTheme && THEMES.includes(urlTheme)) return urlTheme;
+    } catch (e) {}
+    
+    // Fall back to localStorage (saved preference)
     try {
       const saved = localStorage.getItem(THEME_KEY);
       if (saved && THEMES.includes(saved)) return saved;
     } catch (e) {
       // localStorage blocked or unavailable (e.g. Safari ITP in third-party iframe)
     }
-    
-    // Fall back to URL parameter (useful when localStorage is blocked)
-    try {
-      const urlTheme = new URLSearchParams(location.search).get('theme');
-      if (urlTheme && THEMES.includes(urlTheme)) return urlTheme;
-    } catch (e) {}
     
     return DEFAULT_THEME;
   }
