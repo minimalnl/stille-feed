@@ -456,7 +456,9 @@ let chosenByVisitor = false;
 let gridAddr = null; // owner of the Grid this feed sits on (null outside the Grid)
 
 // One up-provider for the whole page (grid-ad.js uses the same one for minting). Only loaded inside an iframe.
-window.qfUP = IN_FRAME ? import('https://esm.sh/@lukso/up-provider@0.3.5?bundle')
+// 0.3.7 finishes account requests once the Grid handshake arrives. 0.3.5 waited for a later parent
+// message, so a Grid connect never completed and a browser extension could stay selected instead.
+window.qfUP = IN_FRAME ? import('https://esm.sh/@lukso/up-provider@0.3.7?bundle')
   .then((m) => m.createClientUPProvider()).catch((e) => { console.warn('up-provider not loaded', e); return null; }) : Promise.resolve(null);
 
 // Resolves with the Grid owner's address, or null when this isn't the Grid (or it doesn't answer in time).

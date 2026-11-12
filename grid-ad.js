@@ -1,6 +1,7 @@
 // Generative Grid: a quiet "tip the creator" block at the bottom of the feed. Live preview, counter, price,
-// and minting 1-5 pieces. Inside the LUKSO Grid it mints via up-provider (shared with app.js, window.qfUP);
-// in a normal browser via the Universal Profile extension (EIP-6963 / window.lukso, fallback window.ethereum).
+// and minting 1-5 pieces. Inside the Universal Everything Grid the logged-in Grid account (up-provider,
+// shared with app.js as window.qfUP) is the account used for connect and mint. A normal browser keeps
+// the Universal Profile extension, Rabby, or another EIP-6963 wallet.
 // ?gg=<number> shows that minted piece in the preview instead of a random seed.
 //
 // The contract has one mint() per piece (exact price, no batch). "Mint 3" therefore sends 3 transactions,
@@ -399,6 +400,59 @@ const GGCollectionHeader = (() => {
 })();
 globalThis.GGCollectionHeader = GGCollectionHeader;
 
+// Which wallet a visit may use. Inside the Grid the logged-in profile wins over any
+// browser extension, including one that announces itself through EIP-6963.
+const GGConnect = (() => {
+  const GRID_RDNS = 'dev.lukso.auth';
+  function isAddr(value) {
+    return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value);
+  }
+  function firstAccount(list) {
+    const account = (list || [])[0];
+    return isAddr(account) ? account : null;
+  }
+  function isGridProvider(walletOrProvider) {
+    const provider = walletOrProvider?.provider || walletOrProvider;
+    const rdns = walletOrProvider?.info?.rdns || walletOrProvider?.rdns;
+    return !!(provider?.isUPClientProvider || rdns === GRID_RDNS);
+  }
+  function gridAccount(provider) {
+    return firstAccount(provider?.contextAccounts);
+  }
+  // On the Grid, an allowed account counts only when it is the logged-in Grid profile.
+  function mintAccount({ useGrid, gridAccount: profile, allowed }) {
+    if (!useGrid) return firstAccount(allowed);
+    if (!isAddr(profile)) return null;
+    return (allowed || []).find((account) => isAddr(account) && account.toLowerCase() === profile.toLowerCase()) || null;
+  }
+  function acceptConnectedAccount({ useGrid, gridAccount: profile, requested }) {
+    const account = firstAccount(requested);
+    if (!account) return { account: null, mismatch: false };
+    if (useGrid && !isAddr(profile)) return { account: null, mismatch: false, waiting: true };
+    if (useGrid && account.toLowerCase() !== profile.toLowerCase()) {
+      return { account: null, mismatch: true, gridAccount: profile };
+    }
+    return { account, mismatch: false };
+  }
+  function chooseWallets({ inGrid, gridProvider, extensions }) {
+    const list = (Array.isArray(extensions) ? extensions : []).filter((wallet) => wallet?.provider);
+    const extras = list.filter((wallet) => wallet.provider !== gridProvider && !isGridProvider(wallet));
+    if (inGrid && gridProvider) {
+      const gridWallet = { info: { name: 'Grid', rdns: GRID_RDNS }, provider: gridProvider, kind: 'grid' };
+      return { wallets: [gridWallet, ...extras], active: gridWallet, useGrid: true };
+    }
+    return { wallets: extras, active: null, useGrid: false };
+  }
+  function assertConnectMethod(method) {
+    if (method === 'eth_sendTransaction' || method === 'eth_signTransaction' || method === 'personal_sign' || method === 'eth_sign') {
+      throw new Error('connect must not send or sign');
+    }
+  }
+  return {
+    GRID_RDNS, isAddr, isGridProvider, gridAccount, mintAccount, acceptConnectedAccount, chooseWallets, assertConnectMethod,
+  };
+})();
+globalThis.GGConnect = GGConnect;
 
 (() => {
   const C = GG_NETS[GG_NET];
@@ -434,7 +488,7 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
   const inGrid = window.parent !== window;
   const el = (id) => box.querySelector('#' + id);
   const st = { script: null, minted: null, max: 1000, base: null, prices: [], qty: 1, provider: null, account: null, wallets: [], wallet: null,
-    busy: false, msg: '', progress: '', useUpProvider: false, contractBalance: null, claimBusy: false, claimMsg: '', fixBusy: false, fixMsg: '', fixProgress: '', headerBusy: false, headerMsg: '' };
+    busy: false, msg: '', progress: '', useUpProvider: false, gridAccount: null, allowed: [], contractBalance: null, claimBusy: false, claimMsg: '', fixBusy: false, fixMsg: '', fixProgress: '', headerBusy: false, headerMsg: '' };
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
   const hexChain = '0x' + C.chainId.toString(16);
@@ -511,9 +565,13 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
     } else {
       b.hidden = true;
     }
-    const walletSwitch = st.wallets.length > 1 && !st.useUpProvider ? ` · ${esc(st.wallet?.info.name || '')} · <button type="button" class="gg-switch" id="ggSwitch">change</button>` : '';
+    const who = st.account || (st.useUpProvider ? st.gridAccount : null);
+    const walletName = st.wallet?.info?.name || (st.useUpProvider ? 'Grid' : '');
+    const walletSwitch = st.wallets.length > 1
+      ? ` · ${esc(walletName)} · <button type="button" class="gg-switch" id="ggSwitch">change</button>`
+      : (st.useUpProvider && who ? ' · Grid' : '');
     el('ggNote').innerHTML = st.msg || (st.provider ? (canMint && q > 1 && !st.busy ? `${q} pieces = ${q} confirmations, one after the other.`
-      : st.account ? short(st.account) + walletSwitch : '') :
+      : who ? short(who) + walletSwitch : '') :
       'Mint in your <a href="https://universaleverything.io" target="_blank" rel="noopener">Grid</a> or with the ' +
       '<a href="https://chromewebstore.google.com/detail/universal-profiles/abpickdkkbnbcoepogfhkhennhfhehfn" target="_blank" rel="noopener">Universal Profile extension</a>.');
     
@@ -605,7 +663,8 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
       if (inGrid && !(await ensureChain(pv))) { st.msg = `Minting is on ${C.name} for now; this Grid is on another network.`; return; }
       let [acc] = (await pv.request({ method: 'eth_accounts', params: [] })) || [];
       if (!acc) {
-        // No account yet: try eth_requestAccounts once (user-initiated call is OK)
+        // No account yet: ask for the account once. This click is Mint, not a silent connect.
+        GGConnect.assertConnectMethod('eth_requestAccounts');
         [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
         if (!acc) { 
           st.msg = inGrid && st.useUpProvider 
@@ -614,6 +673,19 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
           return; 
         }
       }
+      const accepted = GGConnect.acceptConnectedAccount({
+        useGrid: st.useUpProvider,
+        gridAccount: st.useUpProvider ? (GGConnect.gridAccount(pv) || st.gridAccount) : null,
+        requested: [acc],
+      });
+      if (!accepted.account) {
+        st.account = null;
+        st.msg = accepted.mismatch
+          ? `Mint stays on the Grid account ${short(accepted.gridAccount)}.`
+          : 'Connect a profile to mint.';
+        return;
+      }
+      acc = accepted.account;
       if (!inGrid && !(await ensureChain(pv))) { st.msg = `Switch to ${C.name} to mint.`; return; }
       await refresh();
       if (left() === 0) { st.msg = 'Sold out.'; return; }
@@ -873,23 +945,65 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
     }
   }
 
+  async function readAllowed(pv) {
+    try {
+      const accounts = await pv.request({ method: 'eth_accounts', params: [] });
+      return Array.isArray(accounts) ? accounts : [];
+    } catch { return []; }
+  }
+
+  // The Grid profile is on the provider as soon as the handshake finishes, and that first value
+  // does not emit contextAccountsChanged. Poll until it is there, the same way the feed does.
+  function waitForGridProfile(pv, ms = 2500) {
+    const current = () => GGConnect.gridAccount(pv);
+    if (current()) return Promise.resolve(current());
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (account) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        clearInterval(poll);
+        resolve(account || null);
+      };
+      const timer = setTimeout(() => finish(current()), ms);
+      const poll = setInterval(() => { const account = current(); if (account) finish(account); }, 50);
+      pv.on?.('contextAccountsChanged', () => { const account = current(); if (account) finish(account); });
+    });
+  }
+
   async function connect(picked) {
     if (st.busy) return;
     if (!picked && st.wallets.length > 1 && !st.useUpProvider) { st.msg = ''; render(); showPicker(); return; }
     const pv = st.provider;
+    if (!pv) { st.msg = 'The Grid account is not available.'; render(); return; }
     st.busy = true; st.msg = ''; render();
     try {
-      if (inGrid && st.useUpProvider) {
-        // Mobile UE app (no extension): use up-provider eth_requestAccounts to trigger parent mini-app connect
-        const [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
-        st.account = acc || null;
-        if (!acc) st.msg = 'Allow this mini-app in Universal Everything, then try Connect again.';
-        else if (!(await ensureChain(pv))) st.msg = `${short(acc)} · Grid is on another network.`;
-      } else {
-        // Desktop browser (extension available) or standalone: use eth_requestAccounts on extension
-        const [acc] = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
-        st.account = acc || null;
-        if (acc && !(await ensureChain(pv))) st.msg = `${short(acc)} · switch to ${C.name} to mint.`;
+      // Connect only asks for an account. Mint is a later click.
+      GGConnect.assertConnectMethod('eth_requestAccounts');
+      const requested = (await pv.request({ method: 'eth_requestAccounts', params: [] })) || [];
+      const accepted = GGConnect.acceptConnectedAccount({
+        useGrid: st.useUpProvider,
+        gridAccount: st.useUpProvider ? (GGConnect.gridAccount(pv) || st.gridAccount) : null,
+        requested,
+      });
+      if (!accepted.account) {
+        st.account = null;
+        st.msg = accepted.mismatch
+          ? `This stays on the Grid account ${short(accepted.gridAccount)}.`
+          : accepted.waiting
+            ? 'The Grid account is not available yet.'
+            : (st.useUpProvider
+              ? 'Allow this mini-app in Universal Everything, then try Connect again.'
+              : 'Connect a profile to mint.');
+        return;
+      }
+      st.account = accepted.account;
+      if (st.useUpProvider) st.allowed = [accepted.account];
+      if (!(await ensureChain(pv))) {
+        st.msg = st.useUpProvider
+          ? `${short(accepted.account)} · Grid is on another network.`
+          : `${short(accepted.account)} · switch to ${C.name} to mint.`;
       }
     } catch (e) {
       console.warn(e);
@@ -925,8 +1039,28 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
   const bound = new WeakSet();
   function useWallet(w) {
     st.wallet = w; st.provider = w.provider;
+    st.useUpProvider = w.kind === 'grid';
     if (bound.has(w.provider)) return; bound.add(w.provider);
-    w.provider.on?.('accountsChanged', (a) => { if (st.provider !== w.provider) return; st.account = (a && a[0]) || null; st.msg = ''; render(); });
+    w.provider.on?.('accountsChanged', (a) => {
+      if (st.provider !== w.provider) return;
+      if (w.kind === 'grid') {
+        st.allowed = Array.isArray(a) ? a : [];
+        st.gridAccount = GGConnect.gridAccount(w.provider) || st.gridAccount;
+        st.account = GGConnect.mintAccount({ useGrid: true, gridAccount: st.gridAccount, allowed: st.allowed });
+      } else {
+        st.account = (a && a[0]) || null;
+      }
+      st.msg = '';
+      render();
+    });
+    if (w.kind === 'grid') {
+      w.provider.on?.('contextAccountsChanged', (accs) => {
+        if (st.provider !== w.provider) return;
+        st.gridAccount = GGConnect.gridAccount({ contextAccounts: accs });
+        st.account = GGConnect.mintAccount({ useGrid: true, gridAccount: st.gridAccount, allowed: st.allowed || [] });
+        render();
+      });
+    }
     w.provider.on?.('chainChanged', () => { if (st.provider === w.provider) { st.msg = ''; render(); } });
   }
   function hidePicker() { const p = el('ggPick'); if (p) p.remove(); }
@@ -937,10 +1071,25 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
     const t = document.createElement('span'); t.className = 'gg-pick-t'; t.textContent = 'Connect with'; p.append(t);
     st.wallets.forEach((w) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'gg-pick-w';
-      if (w === preferred()) b.classList.add('on');
+      if (w === st.wallet || (!st.wallet && w === preferred())) b.classList.add('on');
       if (w.info.icon && /^data:image\//.test(w.info.icon)) { const i = document.createElement('img'); i.src = w.info.icon; i.alt = ''; b.append(i); }
       b.append(document.createTextNode(w.info.name || 'Wallet'));
-      b.onclick = () => { hidePicker(); try { localStorage.setItem(WKEY, w.info.name || ''); } catch (e) {} useWallet(w); connect(true); };
+      b.onclick = async () => {
+        hidePicker();
+        // A Grid visit always starts again on the Grid account. Remember a choice only outside the Grid.
+        if (!inGrid) { try { localStorage.setItem(WKEY, w.info.name || ''); } catch (e) {} }
+        st.account = null; st.msg = '';
+        useWallet(w);
+        if (w.kind === 'grid') {
+          st.allowed = await readAllowed(w.provider);
+          st.gridAccount = GGConnect.gridAccount(w.provider);
+          st.account = GGConnect.mintAccount({ useGrid: true, gridAccount: st.gridAccount, allowed: st.allowed });
+          render();
+          if (!st.account) connect(true);
+        } else {
+          connect(true);
+        }
+      };
       p.append(b);
     });
     const x = document.createElement('button'); x.type = 'button'; x.className = 'gg-pick-x'; x.textContent = 'Cancel';
@@ -951,50 +1100,49 @@ globalThis.GGCollectionHeader = GGCollectionHeader;
 
   async function initProvider() {
     try {
-      if (inGrid) {
-        // In Grid: detect real EIP-6963 extension (desktop) vs mobile UE app
-        // Discover wallets via EIP-6963 (real extensions announce with rdns/name/icon)
-        const allWallets = await findWallets();
-        const upWallet = allWallets.find(isUP);
-        
-        // Check if it's a REAL extension: EIP-6963 announced with proper info.rdns
-        // Bare window.lukso (no EIP-6963) doesn't have info.rdns and may not work in iframe
-        const hasRealExtension = upWallet && upWallet.info && upWallet.info.rdns;
-        
-        if (hasRealExtension) {
-          // Desktop Grid: real UP extension detected via EIP-6963, use it
-          st.useUpProvider = false;
-          // In Grid, only keep the wallet we actually use; hide picker (connect straight to working extension)
-          st.wallets = [upWallet];
-          useWallet(upWallet);
-          // Check if already connected
-          const [acc] = await upWallet.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
-          st.account = acc || null;
-        } else {
-          // Mobile UE app: no real extension, use up-provider for mini-app connect flow
-          st.useUpProvider = true;
-          st.provider = await (window.qfUP || Promise.resolve(null));
-          if (st.provider) {
-            // Don't call eth_requestAccounts on load; wait for user click on Connect
-            const initial = st.provider.accounts || st.provider.allowedAccounts || 
-              (await st.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []));
-            st.account = (initial && initial[0]) || null;
-            st.provider.on?.('accountsChanged', (a) => { st.account = (a && a[0]) || null; st.msg = ''; render(); });
-            st.provider.on?.('chainChanged', () => { st.msg = ''; render(); });
-          }
-        }
-      } else {
-        // Standalone: find wallets and use preferred
-        st.wallets = await findWallets();
+      const extensions = await findWallets();
+      const gridProvider = inGrid ? await (window.qfUP || Promise.resolve(null)) : null;
+      const choice = GGConnect.chooseWallets({ inGrid, gridProvider, extensions });
+      st.wallets = choice.wallets;
+      if (choice.useGrid) {
+        // The Grid profile is the account, even when a browser extension is also installed.
+        useWallet(choice.active);
+        // Show the logged-in Grid profile before asking which accounts this mini-app may use.
+        // An extension's eth_accounts result is ignored unless it is that same profile.
+        st.gridAccount = await waitForGridProfile(gridProvider);
+        if (!st.gridAccount) st.msg = 'The Grid account is not available yet.';
+        const pending = readAllowed(gridProvider);
+        const first = await Promise.race([
+          pending,
+          new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
+        ]);
+        const applyAllowed = (accounts) => {
+          if (st.provider !== gridProvider || st.account || !accounts) return;
+          st.allowed = accounts;
+          st.gridAccount = GGConnect.gridAccount(gridProvider) || st.gridAccount;
+          st.account = GGConnect.mintAccount({ useGrid: true, gridAccount: st.gridAccount, allowed: accounts });
+          if (st.account) st.msg = '';
+          render();
+        };
+        applyAllowed(first);
+        pending.then(applyAllowed).catch(() => {});
+      } else if (!inGrid) {
         const w = preferred();
         if (!w) { render(); return; }
         useWallet(w);
-        // Already connected earlier with the remembered wallet? Then skip the Connect step (no popup).
+        // Already connected earlier with the remembered wallet? Then skip the Connect step (no popup, no transaction).
         let saved = null; try { saved = localStorage.getItem(WKEY); } catch (e) {}
         if (st.wallets.length === 1 || saved === w.info.name) {
-          const [acc] = await w.provider.request({ method: 'eth_accounts', params: [] }).catch(() => []);
-          st.account = acc || null;
+          st.allowed = await readAllowed(w.provider);
+          st.account = GGConnect.mintAccount({ useGrid: false, allowed: st.allowed });
         }
+      } else {
+        st.provider = null;
+        st.account = null;
+        st.useUpProvider = false;
+        st.msg = choice.wallets.length
+          ? 'The Grid account is not available. <button type="button" class="gg-switch" id="ggSwitch">change</button>'
+          : 'The Grid account is not available.';
       }
       render();
     } catch (e) { console.warn('Wallet not loaded', e); }
