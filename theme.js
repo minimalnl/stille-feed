@@ -83,6 +83,15 @@
     const switcher = document.querySelector('.theme-switch');
     if (!switcher) return;
 
+    // Sync button states with the theme that was actually loaded
+    // (theme.js runs before buttons exist, so initial applyTheme didn't update them)
+    const currentTheme = document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
+    document.querySelectorAll('.theme-switch button').forEach(btn => {
+      const isActive = btn.dataset.theme === currentTheme;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', String(isActive));
+    });
+
     switcher.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-theme]');
       if (!btn) return;
