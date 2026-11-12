@@ -6,6 +6,9 @@ Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo, tags),
 Burnt Pix owned by the profile, and the latest Forever Moments and Hup posts, sorted together by time.
 At the bottom a small "tip the creator" block to mint 1-5 Generative Grid pieces (testnet for now).
 
+**Three themes:** Zwart (dark), Wit (light), Kunstobject (cream/sage, default). The theme switcher is
+in the bottom-right corner. Your choice persists across visits (localStorage + URL fallback).
+
 Which profile is shown (first match wins):
 1. Inside the LUKSO Grid: the owner of that Grid (up-provider `contextAccounts`).
 2. `?address=0x…` in the URL.
