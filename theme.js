@@ -78,37 +78,36 @@
   const currentTheme = getSavedTheme();
   applyTheme(currentTheme);
 
-  // Set up click handlers once DOM is ready
-  function initUI() {
-    const switcher = document.querySelector('.theme-switch');
-    if (!switcher) return;
+  // Click handler is delegated on document and registered immediately.
+  // theme.js runs from <head>, before the switcher exists. Waiting for
+  // DOMContentLoaded left the buttons visible but inert while deferred
+  // scripts (app.js, grid-ad.js) were still loading.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.theme-switch button[data-theme]');
+    if (!btn) return;
 
-    // Sync button states with the theme that was actually loaded
-    // (theme.js runs before buttons exist, so initial applyTheme didn't update them)
+    const theme = btn.dataset.theme;
+    if (!THEMES.includes(theme)) return;
+
+    applyTheme(theme);
+    saveTheme(theme);
+  });
+
+  // Sync button states once the switcher exists.
+  // theme.js runs before the buttons, so the first applyTheme cannot mark them.
+  function syncButtonStates() {
     const currentTheme = document.documentElement.getAttribute('data-theme') || DEFAULT_THEME;
     document.querySelectorAll('.theme-switch button').forEach(btn => {
       const isActive = btn.dataset.theme === currentTheme;
       btn.classList.toggle('active', isActive);
       btn.setAttribute('aria-pressed', String(isActive));
     });
-
-    switcher.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-theme]');
-      if (!btn) return;
-      
-      const theme = btn.dataset.theme;
-      if (!THEMES.includes(theme)) return;
-      
-      applyTheme(theme);
-      saveTheme(theme);
-    });
   }
 
-  // Initialize UI when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initUI);
+    document.addEventListener('DOMContentLoaded', syncButtonStates);
   } else {
-    initUI();
+    syncButtonStates();
   }
 
   // Expose for debugging
