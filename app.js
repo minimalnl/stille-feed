@@ -403,6 +403,68 @@ function syncNext() {
   const inList = !!(id && pix.pieces.length >= 2 && pix.pieces.some((p) => pixKey(p.id) === pixKey(id)));
   btn.hidden = !inList;
 }
+const ENTRY_PIX_KEY = 'qf.entryPix';
+const ENTRY_REF_KEY = 'qf.entryRef';
+const ENTRY_HIST_KEY = 'qf.entryHist';
+function readEntry() {
+  try {
+    return {
+      pix: sessionStorage.getItem(ENTRY_PIX_KEY) || '',
+      referrer: sessionStorage.getItem(ENTRY_REF_KEY) || '',
+      hist: Number(sessionStorage.getItem(ENTRY_HIST_KEY) || ''),
+    };
+  } catch { return { pix: '', referrer: '', hist: NaN }; }
+}
+function clearEntry() {
+  try {
+    sessionStorage.removeItem(ENTRY_PIX_KEY);
+    sessionStorage.removeItem(ENTRY_REF_KEY);
+    sessionStorage.removeItem(ENTRY_HIST_KEY);
+  } catch {}
+  syncBackSeal();
+}
+// Remember the ?pix= this tab was opened with, and an external referrer when there is one.
+function armEntry() {
+  if (IN_FRAME) { clearEntry(); return; }
+  const record = PixLink.entryRecord(location.search, document.referrer, location.href, false);
+  if (!record) { clearEntry(); return; }
+  try {
+    sessionStorage.setItem(ENTRY_PIX_KEY, record.pix);
+    if (record.referrer) sessionStorage.setItem(ENTRY_REF_KEY, record.referrer);
+    else sessionStorage.removeItem(ENTRY_REF_KEY);
+    sessionStorage.setItem(ENTRY_HIST_KEY, String(history.length));
+  } catch {}
+}
+function entryCurrentShort() {
+  if (pix.focusIds.length > 1) return '*';
+  if (pix.focusIds.length !== 1) return '';
+  return PixLink.shortOf(pix.focusIds[0]) || '';
+}
+function syncBackSeal() {
+  const btn = $('#pixBack');
+  if (!btn) return;
+  const e = readEntry();
+  const mode = PixLink.backSealMode(e.pix, e.referrer, entryCurrentShort(), IN_FRAME, PixLink.plan(safePixQuery()).kind);
+  btn.hidden = mode === 'hidden';
+}
+function pinHere(y) {
+  const pin = () => { if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); };
+  pin();
+  requestAnimationFrame(pin);
+}
+function returnToEntry(short) {
+  const y = window.scrollY;
+  const piece = pix.pieces.find((p) => PixLink.shortOf(p.id) === short);
+  if (piece) presentPix(piece, state.address || PixLink.OWNER, 'replace');
+  else {
+    const u = new URL(location.href);
+    u.searchParams.set('pix', short);
+    u.searchParams.delete('id');
+    history.replaceState(null, '', `${u.pathname}${u.search}${u.hash}`);
+    showPixFocus();
+  }
+  pinHere(y);
+}
 function hideFocus() {
   const sec = $('#pixFocus');
   const body = $('#pixBody');
@@ -410,6 +472,7 @@ function hideFocus() {
   if (body) body.innerHTML = '';
   pix.focusIds = [];
   syncNext();
+  syncBackSeal();
   markOpenThumb();
   document.title = 'stille feed';
 }
@@ -421,6 +484,7 @@ function focusNote(text) {
   body.innerHTML = `<p class="note">${esc(text)}</p>`;
   pix.focusIds = [];
   syncNext();
+  syncBackSeal();
   markOpenThumb();
   document.title = 'stille feed';
 }
@@ -458,6 +522,7 @@ function renderPixFocus(cards, owner) {
     });
   });
   syncNext();
+  syncBackSeal();
   markOpenThumb();
   syncTitle(cards);
   watchHeroImg(sec.querySelector('img'));
@@ -467,7 +532,8 @@ function writePixUrl(tokenId) {
 }
 function presentPix(p, owner, hist) {
   const seq = ++focusSeq;
-  if (hist === 'push' || hist === 'stay') writePixUrl(p.id);
+  if (hist === 'replace') history.replaceState(null, '', PixLink.pieceHref(location.href, p.id, state.address));
+  else if (hist === 'push' || hist === 'stay') writePixUrl(p.id);
   const draw = () => {
     if (seq !== focusSeq) return;
     renderPixFocus([p], owner);
@@ -877,6 +943,7 @@ $('#form').addEventListener('submit', (e) => {
   const a = $('#addr').value.trim();
   if (!a) { // empty = forget the saved address, back to the Grid owner or the default
     store.set(null); chosenByVisitor = false;
+    clearEntry();
     const u = new URL(location.href); u.searchParams.delete('address'); dropPieceParams(u);
     focusSeq++;
     focusReady = true;
@@ -888,6 +955,7 @@ $('#form').addEventListener('submit', (e) => {
   const addr = a.toLowerCase();
   chosenByVisitor = true;
   store.set(addr);
+  clearEntry();
   const u = new URL(location.href); u.searchParams.set('address', addr); dropPieceParams(u);
   focusSeq++;
   focusReady = true;
@@ -934,6 +1002,19 @@ $('#pixGrid').addEventListener('click', (e) => {
   e.preventDefault();
   presentPix(p, state.address, 'push');
 });
+const pixBack = $('#pixBack');
+if (pixBack) {
+  pixBack.addEventListener('click', () => {
+    const e = readEntry();
+    const action = PixLink.backClick(
+      e.pix, e.referrer, entryCurrentShort(), history.length, document.referrer, e.hist,
+      IN_FRAME, PixLink.plan(safePixQuery()).kind
+    );
+    if (action.kind === 'piece') returnToEntry(action.pix);
+    else if (action.kind === 'back') history.back();
+    else if (action.kind === 'href' && action.href) location.href = action.href;
+  });
+}
 const pixNext = $('#pixNext');
 if (pixNext) {
   let pinned = null;
@@ -993,6 +1074,7 @@ window.addEventListener('popstate', () => {
   showPixFocus();
 });
 
+armEntry();
 showPixFocus().then(() => {
   if (state.address || IN_FRAME) return;
   show(fallbackAddress());
