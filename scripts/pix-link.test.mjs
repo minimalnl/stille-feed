@@ -185,6 +185,8 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   const css = fs.readFileSync(new URL('style.css', root), 'utf8');
   assert.match(css, /#e04b4b/);
   assert.doesNotMatch(css, /\.pix-next\{[^}]*position:fixed/);
+  assert.match(css, /\.pix-next\{[^}]*background:var\(--sage\)/);
+  assert.match(appjs, /function seatArrow/);
   assert.doesNotMatch(css, /margin-top:-40px/);
   assert.match(html, /id="gg"[^>]*hidden/);
   assert.match(appjs, /FEED_FIRST = 2/);
