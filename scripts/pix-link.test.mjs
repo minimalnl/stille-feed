@@ -94,6 +94,28 @@ test('biggest is most iterations, then the lowest token id, and next wraps', () 
   assert.equal(PixLink.previousPiece(pieces, outside), null);
 });
 
+test('unrefined pieces stay out of the grid order, the biggest, and the arrow', () => {
+  const raw = [
+    { id: EXAMPLE, iterations: 1500000 },
+    { id: OTHER, iterations: 0 },
+    { id: COLLIDE, iterations: null },
+  ];
+  const visible = PixLink.refined(raw);
+  assert.deepEqual(data(visible).map((p) => p.id), [EXAMPLE]);
+  assert.equal(PixLink.refined([{ id: OTHER, iterations: '0' }, { id: COLLIDE, iterations: '' }]).length, 0);
+  assert.equal(PixLink.refined([{ id: EXAMPLE, iterations: '1500000' }])[0].id, EXAMPLE);
+  assert.equal(PixLink.biggest(PixLink.refined([{ id: EXAMPLE, iterations: 0 }, { id: OTHER, iterations: null }])), null);
+  const mixed = PixLink.order(PixLink.refined([
+    { id: EXAMPLE, iterations: 1500000 },
+    { id: OTHER, iterations: 0 },
+    { id: COLLIDE, iterations: 4000000 },
+  ]));
+  assert.deepEqual(data(mixed).map((p) => p.id), [COLLIDE, EXAMPLE]);
+  assert.equal(PixLink.biggest(mixed).id, COLLIDE);
+  assert.equal(PixLink.nextPiece(mixed, COLLIDE).id, EXAMPLE);
+  assert.equal(PixLink.nextPiece(mixed, EXAMPLE).id, COLLIDE);
+});
+
 test('the arrow continues from the opened piece instead of jumping to the biggest', () => {
   const pieces = [
     { id: EXAMPLE, iterations: 1500000 },
@@ -142,6 +164,11 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(appjs, /function holdHero\(/);
   assert.match(appjs, /rpcImmediate/);
   assert.match(appjs, /PixLink\.nextPiece/);
+  assert.match(appjs, /PixLink\.refined/);
+  assert.doesNotMatch(html, /id="pixCount"/);
+  assert.doesNotMatch(appjs, /pixCount/);
+  assert.match(appjs, /id="pixMore">Show more</);
+  assert.doesNotMatch(appjs, /Show more \(\$\{rest\}\)/);
   assert.match(appjs, /barePieceLink/);
   assert.doesNotMatch(appjs, /arrowTarget|bareEntry/);
   assert.match(appjs, /searchParams\.delete\('pix'\)/);
