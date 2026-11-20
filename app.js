@@ -1,5 +1,5 @@
 // stille feed: read-only feed of one Universal Profile (the Generative Grid block in grid-ad.js is the only wallet part).
-const DEFAULT_ADDRESS = '0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1'; // @mark op Hup (LUKSO mainnet UP)
+const DEFAULT_ADDRESS = '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd'; // Mark's collection (LUKSO mainnet UP)
 const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
 const FM = 'https://www.forevermoments.life/api/public/v1';

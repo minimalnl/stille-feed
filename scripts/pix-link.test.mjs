@@ -131,6 +131,8 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.ok(pix !== -1 && app !== -1 && pix < app);
   assert.match(html, /id="pixFocus"/);
   const appjs = fs.readFileSync(new URL('app.js', root), 'utf8');
+  assert.match(appjs, /DEFAULT_ADDRESS = '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd'/);
+  assert.doesNotMatch(appjs, /eccedbdad7dae297d1ef1134cca43cdfc2857bd1/);
   assert.match(appjs, /function showPixFocus\(/);
   assert.match(appjs, /PixLink\.resolve/);
   assert.match(appjs, /showPixFocus\(\)/);

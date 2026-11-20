@@ -32,7 +32,7 @@ Cost: free (Cloudflare Workers free plan: 100,000 requests per day).
 
 Check it works:
 
-    curl -i "https://quiet-feed-hup.<your-subdomain>.workers.dev/api/v1/networks/posts?wallet_address=0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1&network_id=42&post_type=original&limit=2&page=1"
+    curl -i "https://quiet-feed-hup.<your-subdomain>.workers.dev/api/v1/networks/posts?wallet_address=0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd&network_id=42&post_type=original&limit=2&page=1"
 
 You should get `200` with JSON and an `access-control-allow-origin` header (when sent with an allowed `Origin`).
 
