@@ -409,20 +409,11 @@ function syncNext() {
   const inList = !!(id && pix.pieces.length >= 2 && pix.pieces.some((p) => pixKey(p.id) === pixKey(id)));
   btn.hidden = !inList;
 }
-function holdArrow() {
-  const btn = $('#pixNext');
-  const stage = document.querySelector('.pix-stage');
-  if (btn && stage && btn.parentElement !== stage) stage.appendChild(btn);
-}
-function seatArrow() {
-  const btn = $('#pixNext');
-  const head = document.querySelector('#pixFocus .sechead');
-  if (btn && head) head.appendChild(btn);
-}
 function hideFocus() {
   const sec = $('#pixFocus');
-  holdArrow();
-  if (sec) { sec.hidden = true; sec.innerHTML = ''; }
+  const body = $('#pixBody');
+  if (sec) sec.hidden = true;
+  if (body) body.innerHTML = '';
   pix.focusIds = [];
   syncNext();
   markOpenThumb();
@@ -430,10 +421,10 @@ function hideFocus() {
 }
 function focusNote(text) {
   const sec = $('#pixFocus');
-  if (!sec) return;
+  const body = $('#pixBody');
+  if (!sec || !body) return;
   sec.hidden = false;
-  holdArrow();
-  sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div><p class="note">${esc(text)}</p>`;
+  body.innerHTML = `<p class="note">${esc(text)}</p>`;
   pix.focusIds = [];
   syncNext();
   markOpenThumb();
@@ -447,8 +438,9 @@ function renderPixFocus(cards, owner) {
   const many = cards.length > 1;
   const note = many ? '<p class="note">This short link matches more than one Burnt Pix. All of them are shown, in token-id order.</p>' : '';
   const ownerHref = PixLink.ownerHref(location.href, owner);
-  holdArrow();
-  sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div>${note}` + cards.map((p) => {
+  const body = $('#pixBody');
+  if (!body) return;
+  body.innerHTML = note + cards.map((p) => {
     const img = p.img
       ? `<a class="pix-shot" href="${esc(p.link)}" target="_blank" rel="noopener"><img src="${esc(p.img)}" alt="Burnt Pix" width="768" height="768" fetchpriority="high" decoding="async"></a>`
       : '<span class="pix-empty"></span>';
@@ -456,7 +448,6 @@ function renderPixFocus(cards, owner) {
     const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
     return `<article class="pix-one">${img}<div class="pix-one-meta"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(ownerHref)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
   }).join('');
-  seatArrow();
   sec.querySelectorAll('a.pix-owner').forEach((a) => {
     a.addEventListener('pointerdown', () => { a.href = PixLink.ownerHref(location.href, owner); });
     a.addEventListener('click', (e) => {
@@ -559,7 +550,7 @@ async function showPixFocus() {
   if (sec) {
     sec.hidden = false;
     // Keep a picture already on screen (Back) instead of blanking it while the same collection resolves.
-    if (!sec.querySelector('img')) { holdArrow(); sec.innerHTML = '<p class="note">One moment…</p>'; }
+    if (!sec.querySelector('img')) { const body = $('#pixBody'); if (body) body.innerHTML = '<p class="note">One moment…</p>'; }
   }
   // A full ?id= already names the token, so its picture starts now, on its own request.
   // A short ?pix= still needs the collection list; that list starts immediately, and for Mark's
