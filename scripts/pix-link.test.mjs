@@ -76,6 +76,41 @@ test('query reading and the owner link keep theme and drop the piece params', ()
   assert.equal(u.searchParams.get('id'), null);
 });
 
+test('biggest is most iterations, then the lowest token id, and next wraps', () => {
+  const pieces = [
+    { id: EXAMPLE, iterations: 1500000 },
+    { id: OTHER, iterations: 7000000 },
+    { id: COLLIDE, iterations: 7000000 },
+  ];
+  const ordered = PixLink.order(pieces);
+  assert.deepEqual(data(ordered).map((p) => p.id), [OTHER, COLLIDE, EXAMPLE]);
+  assert.equal(PixLink.biggest(pieces).id, OTHER);
+  assert.equal(PixLink.nextPiece(pieces, OTHER).id, COLLIDE);
+  assert.equal(PixLink.nextPiece(pieces, EXAMPLE).id, OTHER);
+  assert.equal(PixLink.previousPiece(pieces, OTHER).id, EXAMPLE);
+  assert.equal(PixLink.nextPiece([pieces[0]], pieces[0].id), null);
+  const outside = PixLink.tokenIdFromAddress('ab'.repeat(20));
+  assert.equal(PixLink.nextPiece(pieces, outside).id, OTHER);
+  assert.equal(PixLink.previousPiece(pieces, outside), null);
+});
+
+test('a piece link keeps the profile and the theme, and an owner link can name that owner', () => {
+  const owner = '0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1';
+  const piece = PixLink.pieceHref('https://minimalnl.github.io/stille-feed/?theme=zwart&id=abc', EXAMPLE, owner);
+  const pu = new URL(piece, 'https://minimalnl.github.io');
+  assert.equal(pu.pathname, '/stille-feed/');
+  assert.equal(pu.searchParams.get('pix'), '9bf4ee85');
+  assert.equal(pu.searchParams.get('id'), null);
+  assert.equal(pu.searchParams.get('address'), owner);
+  assert.equal(pu.searchParams.get('theme'), 'zwart');
+  const href = PixLink.ownerHref('https://minimalnl.github.io/stille-feed/?pix=9bf4ee85&theme=wit', owner);
+  const u = new URL(href, 'https://minimalnl.github.io');
+  assert.equal(u.searchParams.get('address'), owner);
+  assert.equal(u.searchParams.get('theme'), 'wit');
+  assert.equal(u.searchParams.get('pix'), null);
+  assert.equal(u.searchParams.get('id'), null);
+});
+
 test('the page loads the linker and asks the feed to open a linked piece', () => {
   const root = new URL('..', import.meta.url);
   const html = fs.readFileSync(new URL('index.html', root), 'utf8');
@@ -87,6 +122,25 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(appjs, /function showPixFocus\(/);
   assert.match(appjs, /PixLink\.resolve/);
   assert.match(appjs, /showPixFocus\(\)/);
+  assert.match(appjs, /PixLink\.biggest/);
+  assert.match(appjs, /PixLink\.pieceHref/);
+  assert.match(appjs, /PixLink\.nextPiece/);
+  assert.match(appjs, /searchParams\.delete\('pix'\)/);
+  assert.match(html, /id="pixNext"/);
+  assert.match(html, /id="ggHint"/);
+  assert.match(html, /id="themeMenu"[^>]*hidden/);
+  assert.match(html, />Black</);
+  assert.match(html, />White</);
+  assert.match(html, />Art</);
+  assert.doesNotMatch(html, />Kunstobject</);
+  const grid = fs.readFileSync(new URL('grid-ad.js', root), 'utf8');
+  assert.match(grid, /function loadKeccak\(/);
+  assert.match(grid, /ggHint/);
+  assert.doesNotMatch(grid, /IntersectionObserver/);
+  const startAt = grid.indexOf('function start()');
+  const importAt = grid.indexOf('https://esm.sh/@noble/hashes');
+  assert.ok(startAt !== -1 && importAt !== -1 && importAt < startAt);
+  assert.match(grid.slice(startAt), /loadKeccak\(\)/);
 });
 
 test('iteration text matches the feed', () => {

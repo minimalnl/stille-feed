@@ -21,7 +21,8 @@ const PIX_PAGE = 6;
 const FEED_PAGE = 6;
 
 const $ = (s) => document.querySelector(s);
-const pix = { pieces: [], shown: 0, gen: 0 };
+const pix = { pieces: [], shown: 0, gen: 0, focusIds: [] };
+let focusSeq = 0;
 const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_PAGE, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -192,24 +193,102 @@ async function loadPixCache(address) {
   if (d.address !== address.toLowerCase()) return null;
   return d.pieces.map((p) => ({ id: p.id, iterations: p.iterations, img: p.thumb ? 'thumbs/' + p.thumb : '', img1x: p.thumb1x ? 'thumbs/' + p.thumb1x : '', link: pixLink(p.id) }));
 }
+// One on-chain SVG per piece. The large view and a later thumbnail share it.
+const pixMeta = new Map();
+const pixMetaWait = new Map();
+function pixKey(id) {
+  return (PixLink.addressOf(id) || String(id || '')).toLowerCase();
+}
+function applyPixMeta(p, meta) {
+  if (!meta) return p;
+  if (meta.img != null) p.img = meta.img;
+  if (meta.link) p.link = meta.link;
+  if (p.iterations == null && meta.iterations != null) p.iterations = meta.iterations;
+  return p;
+}
+function ensurePixImg(p) {
+  const key = pixKey(p.id);
+  if (p.img != null) {
+    if (!pixMeta.has(key)) pixMeta.set(key, { img: p.img, link: p.link || pixLink(p.id), iterations: p.iterations });
+    return Promise.resolve(p);
+  }
+  if (pixMeta.has(key)) return Promise.resolve(applyPixMeta(p, pixMeta.get(key)));
+  if (pixMetaWait.has(key)) return pixMetaWait.get(key).then((meta) => applyPixMeta(p, meta));
+  const job = loadPixMeta(p.id).then((meta) => {
+    const stored = { img: meta.img || '', link: meta.link || pixLink(p.id), iterations: meta.iterations };
+    pixMeta.set(key, stored);
+    for (const piece of pix.pieces) {
+      if (pixKey(piece.id) === key) applyPixMeta(piece, stored);
+    }
+    return stored;
+  }).catch(() => {
+    const stored = { img: '', link: pixLink(p.id) };
+    pixMeta.set(key, stored);
+    return stored;
+  });
+  pixMetaWait.set(key, job);
+  return job.then((meta) => applyPixMeta(p, meta));
+}
 function pixCard(p) {
+  const open = (pix.focusIds || []).some((id) => pixKey(id) === pixKey(p.id));
+  const href = PixLink.pieceHref(location.href, p.id, state.address);
   const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy" decoding="async">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy" decoding="async">`) : '<span class="pix-empty"></span>';
-  return `<a class="pix" href="${esc(p.link)}" target="_blank" rel="noopener" title="View this Burnt Pix">
+  return `<a class="pix${open ? ' on' : ''}" href="${esc(href)}" data-id="${esc(p.id)}" title="View this Burnt Pix">
     ${imgTag}
     <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>`;
 }
-async function showMorePix() {
+// The picture itself waits until the card is near the screen. Thumbs that are already filled in stay as they are.
+// Cards are not watched until the large view has taken its space: on a short first paint the grid is in
+// the viewport, and an eager watch would fetch a picture the hero then pushes below the fold.
+let focusReady = false;
+const pixPending = [];
+function armPixCard(card, p, gen) {
+  const load = () => {
+    if (gen !== pix.gen) return;
+    ensurePixImg(p).then(() => {
+      if (gen !== pix.gen || !card.isConnected) return;
+      card.outerHTML = pixCard(p);
+      markOpenThumb();
+    });
+  };
+  if (!('IntersectionObserver' in window)) { load(); return; }
+  const io = new IntersectionObserver((es) => {
+    if (!es.some((x) => x.isIntersecting)) return;
+    io.disconnect();
+    load();
+  }, { rootMargin: '80px 0px' });
+  io.observe(card);
+}
+function whenPixVisible(card, p, gen) {
+  if (!card || p.img != null) return;
+  if (!focusReady) { pixPending.push({ card, p, gen }); return; }
+  armPixCard(card, p, gen);
+}
+function settleFocus() {
+  focusReady = true;
+  const waiting = pixPending.splice(0);
+  for (const item of waiting) {
+    if (item.gen !== pix.gen || !item.card.isConnected || item.p.img != null) continue;
+    armPixCard(item.card, item.p, item.gen);
+  }
+}
+function showMorePix() {
   const gen = pix.gen;
   const next = pix.pieces.slice(pix.shown, pix.shown + PIX_PAGE);
   pix.shown += next.length;
-  const btn = $('#pixMore'); if (btn) btn.textContent = 'One moment…';
-  await Promise.all(next.map(async (p) => { if (p.img == null) Object.assign(p, await loadPixMeta(p.id).catch(() => ({ img: '' }))); }));
-  if (gen !== pix.gen) return;
   const grid = $('#pixGrid');
-  next.forEach((p) => { grid.insertAdjacentHTML('beforeend', pixCard(p)); });
+  next.forEach((p) => {
+    grid.insertAdjacentHTML('beforeend', pixCard(p));
+    whenPixVisible(grid.lastElementChild, p, gen);
+  });
   const rest = pix.pieces.length - pix.shown;
   $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Show more (${rest})</button>` : '';
   if (rest > 0) $('#pixMore').onclick = showMorePix;
+  markOpenThumb();
+}
+function noPieces(gen, address) {
+  if (gen !== pix.gen || address !== state.address) return;
+  if (PixLink.plan(safePixQuery()).kind === 'absent') hideFocus();
 }
 async function showPix(address) {
   pix.gen++; pix.pieces = []; pix.shown = 0;
@@ -218,8 +297,10 @@ async function showPix(address) {
   let pieces = await loadPixCache(address).catch(() => null);
   if (!pieces) {
     let ids = [];
-    try { ids = await cached('pixids:' + address, 10 * MIN, () => loadPixIds(address)); } catch { return; }
-    if (!ids.length || address !== state.address) return;
+    try { ids = await cached('pixids:' + address, 10 * MIN, () => loadPixIds(address)); }
+    catch { noPieces(gen, address); return; }
+    if (gen !== pix.gen || address !== state.address) return;
+    if (!ids.length) { noPieces(gen, address); return; }
     sec.hidden = false;
     $('#pixCount').textContent = ids.length === 1 ? '1 piece' : `${ids.length} pieces`;
     $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = 'Loading iterations…';
@@ -227,73 +308,200 @@ async function showPix(address) {
       Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await loadPixIterations(id).catch(() => 0)]))));
     pieces = ids.map((id) => ({ id, img: null, link: pixLink(id), iterations: its[id] || 0 }));
   }
-  if (gen !== pix.gen || address !== state.address || !pieces.length) return;
+  if (gen !== pix.gen || address !== state.address) return;
+  if (!pieces.length) { noPieces(gen, address); return; }
   sec.hidden = false;
   $('#pixCount').textContent = pieces.length === 1 ? '1 piece' : `${pieces.length} pieces`;
-  pix.pieces = pieces.sort((a, b) => (b.iterations || 0) - (a.iterations || 0));
+  pix.pieces = PixLink.order(pieces);
   $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = '';
-  await showMorePix();
+  // Lead first, so the large picture occupies the screen before any thumbnail asks for its SVG.
+  applyProfileLead();
+  showMorePix();
 }
 
-// ---------- One Burnt Pix, from ?pix= or ?id= ----------
-// Looked up in Mark's collection (PixLink.OWNER), whichever profile the rest of the feed is showing.
-// A link that doesn't match just leaves a quiet note; the feed below is unchanged.
+// ---------- One Burnt Pix, from ?pix= or ?id=, or the profile's biggest ----------
+// A link is tried in the profile on screen first, then in Mark's collection (PixLink.OWNER).
+// With no link, that profile's biggest piece leads, and the URL stays a profile URL until a piece is opened.
+// A link that doesn't match leaves a quiet note; the feed below is unchanged.
 const PIX_MISS = 'No Burnt Pix matches this link.';
 const PIX_LATER = 'This Burnt Pix can\'t be opened right now.';
+function safePixQuery() {
+  try { return PixLink.readQuery(location.search); } catch { return {}; }
+}
+function plainClick(e) {
+  return !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0;
+}
+function syncTitle(cards) {
+  const plan = PixLink.plan(safePixQuery());
+  if ((plan.kind === 'pix' || plan.kind === 'id') && cards && cards.length === 1) {
+    document.title = PixLink.iterationsLabel(cards[0].iterations) + ' · stille feed';
+  } else document.title = 'stille feed';
+}
+function markOpenThumb() {
+  const open = new Set((pix.focusIds || []).map(pixKey));
+  document.querySelectorAll('#pixGrid .pix').forEach((a) => {
+    a.classList.toggle('on', open.has(pixKey(a.dataset.id)));
+  });
+}
+function syncNext() {
+  const btn = $('#pixNext');
+  if (!btn) return;
+  const id = pix.focusIds.length === 1 ? pix.focusIds[0] : null;
+  const inList = !!(id && pix.pieces.length >= 2 && pix.pieces.some((p) => pixKey(p.id) === pixKey(id)));
+  btn.hidden = !inList;
+}
+function hideFocus() {
+  const sec = $('#pixFocus');
+  if (sec) { sec.hidden = true; sec.innerHTML = ''; }
+  pix.focusIds = [];
+  syncNext();
+  markOpenThumb();
+  document.title = 'stille feed';
+}
 function focusNote(text) {
   const sec = $('#pixFocus');
   if (!sec) return;
   sec.hidden = false;
   sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div><p class="note">${esc(text)}</p>`;
+  pix.focusIds = [];
+  syncNext();
+  markOpenThumb();
+  document.title = 'stille feed';
 }
-function renderPixFocus(cards) {
+function renderPixFocus(cards, owner) {
   const sec = $('#pixFocus');
+  if (!sec) return;
   sec.hidden = false;
+  pix.focusIds = cards.map((p) => p.id);
   const many = cards.length > 1;
   const note = many ? '<p class="note">This short link matches more than one Burnt Pix. All of them are shown, in token-id order.</p>' : '';
-  const owner = PixLink.ownerHref(location.href);
+  const ownerHref = PixLink.ownerHref(location.href, owner);
   sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div>${note}` + cards.map((p) => {
     const img = p.img
       ? `<a class="pix-shot" href="${esc(p.link)}" target="_blank" rel="noopener"><img src="${esc(p.img)}" alt="Burnt Pix" width="768" height="768" decoding="async"></a>`
       : '<span class="pix-empty"></span>';
     const addr = PixLink.addressOf(p.id) || '';
     const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
-    return `<article class="pix-one">${img}<div class="pix-one-meta"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(owner)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
+    return `<article class="pix-one">${img}<div class="pix-one-meta"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(ownerHref)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
   }).join('');
-  // Theme can change after this renders; take the current URL when the owner link is used.
   sec.querySelectorAll('a.pix-owner').forEach((a) => {
-    a.addEventListener('pointerdown', () => { a.href = PixLink.ownerHref(location.href); });
+    a.addEventListener('pointerdown', () => { a.href = PixLink.ownerHref(location.href, owner); });
+    a.addEventListener('click', (e) => {
+      if (!plainClick(e)) return;
+      const who = String(owner || '').toLowerCase();
+      if (who && who !== String(state.address || '').toLowerCase()) return;
+      e.preventDefault();
+      if (PixLink.plan(safePixQuery()).kind === 'absent') return;
+      history.pushState(null, '', PixLink.ownerHref(location.href, owner));
+      const top = PixLink.biggest(pix.pieces);
+      if (top) presentPix(top, state.address, null);
+      else hideFocus();
+      sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   });
-  if (cards.length === 1) document.title = PixLink.iterationsLabel(cards[0].iterations) + ' · stille feed';
+  syncNext();
+  markOpenThumb();
+  syncTitle(cards);
+}
+function writePixUrl(tokenId) {
+  history.pushState(null, '', PixLink.pieceHref(location.href, tokenId, state.address));
+}
+function presentPix(p, owner, hist) {
+  const seq = ++focusSeq;
+  if (hist === 'push') writePixUrl(p.id);
+  const draw = () => {
+    if (seq !== focusSeq) return;
+    renderPixFocus([p], owner);
+    if (hist === 'push') {
+      const sec = $('#pixFocus');
+      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+  draw();
+  if (p.img == null) ensurePixImg(p).then(draw);
+}
+function applyProfileLead() {
+  const plan = PixLink.plan(safePixQuery());
+  if (plan.kind === 'bad') return;
+  if (plan.kind === 'absent') {
+    const top = PixLink.biggest(pix.pieces);
+    if (top) presentPix(top, state.address, null);
+    else hideFocus();
+    settleFocus();
+    return;
+  }
+  const found = PixLink.resolve(pix.pieces.map((p) => p.id), safePixQuery());
+  if (found.kind !== 'one' && found.kind !== 'many') return;
+  const cards = found.ids.map((id) => pix.pieces.find((p) => pixKey(p.id) === pixKey(id))).filter(Boolean);
+  if (!cards.length) return;
+  const seq = ++focusSeq;
+  const draw = () => { if (seq === focusSeq) renderPixFocus(cards, state.address); };
+  draw();
+  settleFocus();
+  Promise.all(cards.map((p) => (p.img == null ? ensurePixImg(p) : null))).then(draw);
+}
+function movePix(step) {
+  const id = pix.focusIds.length === 1 ? pix.focusIds[0] : null;
+  if (!id || !pix.pieces.some((p) => pixKey(p.id) === pixKey(id))) return;
+  const nxt = step < 0 ? PixLink.previousPiece(pix.pieces, id) : PixLink.nextPiece(pix.pieces, id);
+  if (!nxt) return;
+  presentPix(nxt, state.address, 'push');
+}
+async function idsOf(address) {
+  const cachedPieces = await loadPixCache(address).catch(() => null);
+  if (cachedPieces) return cachedPieces.map((p) => p.id);
+  return cached('pixids:' + address, 10 * MIN, () => loadPixIds(address));
+}
+async function pieceFor(id) {
+  const have = pix.pieces.find((p) => pixKey(p.id) === pixKey(id));
+  if (have) {
+    await ensurePixImg(have);
+    return have;
+  }
+  const it = await loadPixIterations(id).catch(() => null);
+  const p = { id, img: null, link: pixLink(id), iterations: it };
+  await ensurePixImg(p);
+  return p;
 }
 async function showPixFocus() {
-  let q;
-  try { q = PixLink.readQuery(location.search); } catch { return; }
+  const q = safePixQuery();
   const plan = PixLink.plan(q);
-  if (plan.kind === 'absent') return;
-  if (plan.kind === 'bad') { focusNote(PIX_MISS); return; }
+  if (plan.kind === 'absent') { settleFocus(); return; }
+  focusReady = false;
+  if (plan.kind === 'bad') { focusNote(PIX_MISS); settleFocus(); return; }
+  const seq = ++focusSeq;
   const sec = $('#pixFocus');
   if (sec) { sec.hidden = false; sec.innerHTML = '<p class="note">One moment…</p>'; }
   try {
-    const ids = await cached('pixids:' + PixLink.OWNER, 10 * MIN, () => loadPixIds(PixLink.OWNER));
-    const found = PixLink.resolve(ids, q);
-    if (found.kind !== 'one' && found.kind !== 'many') { focusNote(PIX_MISS); return; }
-    const cards = await Promise.all(found.ids.map(async (id) => {
-      const [meta, it] = await Promise.all([
-        loadPixMeta(id).catch(() => null),
-        loadPixIterations(id).catch(() => null),
-      ]);
-      return {
-        id,
-        img: meta?.img || '',
-        link: (meta && meta.link) || pixLink(id),
-        iterations: it != null ? it : meta?.iterations,
-      };
-    }));
-    renderPixFocus(cards);
+    const profile = fallbackAddress();
+    let owner = profile;
+    let ids = await idsOf(profile);
+    if (seq !== focusSeq) return;
+    let found = PixLink.resolve(ids, q);
+    if (found.kind !== 'one' && found.kind !== 'many' && profile !== PixLink.OWNER) {
+      owner = PixLink.OWNER;
+      ids = await idsOf(owner);
+      if (seq !== focusSeq) return;
+      found = PixLink.resolve(ids, q);
+    }
+    if (found.kind !== 'one' && found.kind !== 'many') {
+      if (seq !== focusSeq) return;
+      focusNote(PIX_MISS);
+      settleFocus();
+      return;
+    }
+    const cards = [];
+    for (const id of found.ids) {
+      if (seq !== focusSeq) return;
+      cards.push(await pieceFor(id));
+      if (seq !== focusSeq) return;
+    }
+    if (seq !== focusSeq) return;
+    renderPixFocus(cards, owner);
+    settleFocus();
   } catch (e) {
     console.warn('Burnt Pix link', e);
-    focusNote(PIX_LATER);
+    if (seq === focusSeq) { focusNote(PIX_LATER); settleFocus(); }
   }
 }
 
@@ -546,12 +754,18 @@ function fallbackAddress() {
   return isAddr(qp) ? qp.toLowerCase() : store.get() || DEFAULT_ADDRESS;
 }
 
+function dropPieceParams(u) {
+  u.searchParams.delete('pix');
+  u.searchParams.delete('id');
+}
 $('#form').addEventListener('submit', (e) => {
   e.preventDefault();
   const a = $('#addr').value.trim();
   if (!a) { // empty = forget the saved address, back to the Grid owner or the default
     store.set(null); chosenByVisitor = false;
-    const u = new URL(location.href); u.searchParams.delete('address');
+    const u = new URL(location.href); u.searchParams.delete('address'); dropPieceParams(u);
+    focusSeq++;
+    focusReady = true;
     history.replaceState(null, '', u);
     show(gridAddr || DEFAULT_ADDRESS);
     return;
@@ -560,7 +774,9 @@ $('#form').addEventListener('submit', (e) => {
   const addr = a.toLowerCase();
   chosenByVisitor = true;
   store.set(addr);
-  const u = new URL(location.href); u.searchParams.set('address', addr);
+  const u = new URL(location.href); u.searchParams.set('address', addr); dropPieceParams(u);
+  focusSeq++;
+  focusReady = true;
   history.replaceState(null, '', u);
   show(addr);
 });
@@ -570,6 +786,58 @@ $('#filters').addEventListener('click', (e) => {
   state.feedShown = FEED_PAGE;
   document.querySelectorAll('#filters button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
   renderFeed();
+});
+
+$('#pixGrid').addEventListener('click', (e) => {
+  const a = e.target.closest('a.pix');
+  if (!a || !plainClick(e)) return;
+  const p = pix.pieces.find((x) => pixKey(x.id) === pixKey(a.dataset.id));
+  if (!p) return;
+  e.preventDefault();
+  presentPix(p, state.address, 'push');
+});
+const pixNext = $('#pixNext');
+if (pixNext) pixNext.addEventListener('click', () => movePix(1));
+(() => {
+  const sec = $('#pixFocus');
+  if (!sec) return;
+  let swipe = null;
+  let swiped = false;
+  sec.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    swipe = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  });
+  sec.addEventListener('pointerup', (e) => {
+    if (!swipe || swipe.id !== e.pointerId) return;
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    swipe = null;
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    swiped = true;
+    movePix(dx < 0 ? 1 : -1);
+  });
+  sec.addEventListener('click', (e) => {
+    if (!swiped) return;
+    swiped = false;
+    e.preventDefault();
+  }, true);
+})();
+window.addEventListener('popstate', () => {
+  const addr = fallbackAddress();
+  if (addr !== state.address) {
+    focusSeq++;
+    show(addr);
+    return;
+  }
+  const plan = PixLink.plan(safePixQuery());
+  if (plan.kind === 'absent') {
+    const top = PixLink.biggest(pix.pieces);
+    if (top) presentPix(top, state.address, null);
+    else hideFocus();
+    settleFocus();
+    return;
+  }
+  showPixFocus();
 });
 
 showPixFocus();

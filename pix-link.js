@@ -3,7 +3,9 @@
 //   ?pix=<first 8 hex chars of that address>     short form, for posts
 //   ?id=<last 40 hex chars of the tokenId>       the whole address, unambiguous
 // A 64-hex tokenId is also accepted for ?id=; the address is still the last 40 hex chars.
-// Both are resolved only against PIX owner 0x7070…47FD (not the profile the feed happens to be showing).
+// A link is resolved in the profile on screen first, then in Mark's collection 0x7070…47FD,
+// so an old ?pix= link still opens when the feed itself is a different profile.
+// With no ?pix= or ?id=, the profile's biggest piece leads (most iterations, then lowest token id).
 // 8 hex chars are unique across that collection today. If two pieces ever share a prefix, every match
 // is returned, ordered by token id (address ascending) — nothing is dropped and nothing is guessed.
 (function () {
@@ -79,23 +81,66 @@
     const q = new URLSearchParams(String(search || '').replace(/^\?/, ''));
     return { pix: q.get('pix'), id: q.get('id') };
   }
-  // Same-site link to the collection owner. Keeps theme and any other params; drops the piece params.
-  function ownerHref(href) {
-    const u = new URL(href, 'https://minimalnl.github.io');
-    u.searchParams.set('address', OWNER);
-    u.searchParams.delete('pix');
-    u.searchParams.delete('id');
-    return `${u.pathname}${u.search}${u.hash}`;
-  }
   function iterationsLabel(value) {
     if (value == null || value === '') return 'Burnt Pix';
     const n = typeof value === 'number' ? value : Number(String(value).trim());
     if (!Number.isFinite(n)) return 'Burnt Pix';
     return n.toLocaleString('en-US') + ' iterations';
   }
+  // Most iterations first. Ties break on the token address, lowest first, so the leader is stable.
+  function order(pieces) {
+    return [...(pieces || [])].map((p, i) => ({ p, i })).sort((a, b) => {
+      const d = (Number(b.p.iterations) || 0) - (Number(a.p.iterations) || 0);
+      if (d) return d;
+      const aa = addressOf(a.p.id) || '';
+      const bb = addressOf(b.p.id) || '';
+      if (aa !== bb) return aa < bb ? -1 : 1;
+      return a.i - b.i;
+    }).map((x) => x.p);
+  }
+  function biggest(pieces) {
+    return order(pieces)[0] || null;
+  }
+  // step +1 is the next-smaller piece (the arrow). The list wraps, so the smallest leads back to the biggest.
+  function stepPiece(pieces, currentId, step) {
+    const sorted = order(pieces);
+    if (sorted.length < 2) return null;
+    const cur = addressOf(currentId);
+    const i = sorted.findIndex((p) => addressOf(p.id) === cur);
+    const dir = step < 0 ? -1 : 1;
+    if (i < 0) return dir < 0 ? null : sorted[0];
+    return sorted[(i + dir + sorted.length) % sorted.length];
+  }
+  function nextPiece(pieces, currentId) { return stepPiece(pieces, currentId, 1); }
+  function previousPiece(pieces, currentId) { return stepPiece(pieces, currentId, -1); }
+  function addressParam(owner) {
+    const s = clean(owner || '');
+    return /^[0-9a-f]{40}$/.test(s) ? '0x' + s : null;
+  }
+  // Same-site link to a profile, without a piece selected, so that profile's biggest pix leads.
+  function ownerHref(href, owner) {
+    const u = new URL(href, 'https://minimalnl.github.io');
+    u.searchParams.set('address', addressParam(owner) || OWNER);
+    u.searchParams.delete('pix');
+    u.searchParams.delete('id');
+    return `${u.pathname}${u.search}${u.hash}`;
+  }
+  // Shareable link to one piece. Uses the short ?pix= form and keeps the profile in ?address=.
+  function pieceHref(href, tokenId, owner) {
+    const u = new URL(href, 'https://minimalnl.github.io');
+    const short = shortOf(tokenId);
+    if (short) {
+      u.searchParams.set('pix', short);
+      u.searchParams.delete('id');
+    }
+    const who = addressParam(owner);
+    if (who) u.searchParams.set('address', who);
+    return `${u.pathname}${u.search}${u.hash}`;
+  }
 
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
-    plan, resolve, readQuery, ownerHref, iterationsLabel,
+    plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
+    order, biggest, nextPiece, previousPiece,
   };
 })();
