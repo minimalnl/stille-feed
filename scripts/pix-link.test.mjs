@@ -146,6 +146,9 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(html, /id="pixNext"/);
   assert.match(html, /id="ggHint"/);
   assert.match(html, /id="socialToggle"/);
+  assert.match(html, /class="social-mark"/);
+  const css = fs.readFileSync(new URL('style.css', root), 'utf8');
+  assert.match(css, /#e04b4b/);
   assert.match(html, /id="gg"[^>]*hidden/);
   assert.match(appjs, /FEED_FIRST = 2/);
   assert.match(appjs, /feedShown: FEED_FIRST/);
