@@ -473,10 +473,12 @@ function writePixUrl(tokenId) {
 }
 function presentPix(p, owner, hist) {
   const seq = ++focusSeq;
-  if (hist === 'push') writePixUrl(p.id);
+  if (hist === 'push' || hist === 'stay') writePixUrl(p.id);
   const draw = () => {
     if (seq !== focusSeq) return;
     renderPixFocus([p], owner);
+    // A thumbnail is opened from further down the page, so bring that picture up.
+    // The next arrow stays where the visitor already is.
     if (hist === 'push') {
       const sec = $('#pixFocus');
       if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -516,7 +518,7 @@ function movePix(step) {
   if (!id || !pix.pieces.some((p) => pixKey(p.id) === pixKey(id))) return;
   const nxt = step < 0 ? PixLink.previousPiece(pix.pieces, id) : PixLink.nextPiece(pix.pieces, id);
   if (!nxt) return;
-  presentPix(nxt, state.address, 'push');
+  presentPix(nxt, state.address, 'stay');
 }
 async function idsOf(address) {
   // Thumbs exist only for the default profile. Other collections go straight to the chain.
@@ -935,7 +937,18 @@ $('#pixGrid').addEventListener('click', (e) => {
   presentPix(p, state.address, 'push');
 });
 const pixNext = $('#pixNext');
-if (pixNext) pixNext.addEventListener('click', () => movePix(1));
+if (pixNext) {
+  let pinned = null;
+  pixNext.addEventListener('pointerdown', () => { pinned = window.scrollY; });
+  pixNext.addEventListener('click', () => {
+    const y = pinned == null ? window.scrollY : pinned;
+    pinned = null;
+    movePix(1);
+    const pin = () => { if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y); };
+    pin();
+    requestAnimationFrame(pin);
+  });
+}
 (() => {
   const sec = $('#pixFocus');
   if (!sec) return;
