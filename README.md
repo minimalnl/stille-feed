@@ -54,15 +54,16 @@ The large picture is fetched before the profile, the posts, and the thumbnail gr
 Link-preview tags (`og:image`, `og:title`) are not generated per piece. GitHub Pages serves one `index.html`,
 and a crawler does not get different meta tags for a query string. Per-piece previews would need a static page
 per pix (for example `/p/9bf4ee85/`) plus a raster image: each picture is an on-chain SVG of about 250 KB, and
-the collection is more than two thousand pieces. The thumbnail job only covers the one Burnt Pix on the default
-profile, so that workflow was not extended.
+the collection is more than two thousand pieces. The thumbnail job only covers the one Burnt Pix of
+0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1, and the page uses that cache only when the file's address
+matches the profile on screen, so that workflow was not extended.
 
 Run locally:
 
     python3 serve.py 8080
     # open http://localhost:8080/  or  http://localhost:8080/?address=0x…
 
-Default address: 0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1 (@mark on Hup).
+Default address: 0x7070b7Cb8fAe99B6C7DDd0eaBe831DCb6c3047FD (Mark's collection).
 
 Sources:
 - LSP3: eth_call getData(LSP3Profile) on https://rpc.mainnet.lukso.network, JSON via api.universalprofile.cloud/ipfs
