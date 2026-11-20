@@ -288,7 +288,7 @@ function showMorePix() {
     whenPixVisible(grid.lastElementChild, p, gen);
   });
   const rest = pix.pieces.length - pix.shown;
-  $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Show more (${rest})</button>` : '';
+  $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Show more</button>` : '';
   if (rest > 0) $('#pixMore').onclick = showMorePix;
   markOpenThumb();
 }
@@ -340,18 +340,18 @@ async function showPix(address) {
     catch { noPieces(gen, address); return; }
     if (gen !== pix.gen || address !== state.address) return;
     if (!ids.length) { noPieces(gen, address); return; }
-    sec.hidden = false;
-    $('#pixCount').textContent = ids.length === 1 ? '1 piece' : `${ids.length} pieces`;
-    $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = 'Loading iterations…';
     const its = await cached('pixit:' + address, 10 * MIN, async () =>
       Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await loadPixIterations(id).catch(() => 0)]))));
+    if (gen !== pix.gen || address !== state.address) return;
     pieces = ids.map((id) => ({ id, img: null, link: pixLink(id), iterations: its[id] || 0 }));
   }
   if (gen !== pix.gen || address !== state.address) return;
+  // The heading stays hidden until this filter has run, so a raw total never flashes.
+  pieces = PixLink.refined(pieces);
   if (!pieces.length) { noPieces(gen, address); return; }
   sec.hidden = false;
-  $('#pixCount').textContent = pieces.length === 1 ? '1 piece' : `${pieces.length} pieces`;
   pix.pieces = PixLink.order(pieces);
+  syncNext();
   $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = '';
   // The large picture is chosen and fetched before any thumbnail asks for its SVG.
   applyProfileLead();

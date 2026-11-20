@@ -39,9 +39,11 @@ malformed value leaves the normal feed in place, with a short note, and does not
 The 8-hex prefixes are unique across the collection today; if two pieces ever share one, every match is
 shown, ordered by token id.
 
-With no `?pix=` or `?id=`, the profile's biggest piece (most iterations, then the lowest token id) leads in
+With no `?pix=` or `?id=`, the profile's biggest refined piece (most iterations, then the lowest token id) leads in
 the large view. That choice is not written into the URL, so the profile link keeps meaning "their current
-biggest". A thumbnail click opens that piece large and sets `?pix=` plus `?address=` via history, so Back
+biggest". A piece with no iterations — 0, or empty once its count has loaded — is left out of that order:
+it does not lead, it is not in the grid, and the arrow skips it. A direct `?pix=` or `?id=` link still opens that
+one piece. The Burnt Pix heading shows no count, and its Show more has no number. A thumbnail click opens that piece large and sets `?pix=` plus `?address=` via history, so Back
 works and the link can be shared. The View form clears `?pix=` and `?id=` when the address changes. The
 arrow on the right (and a horizontal swipe) moves to the next-smaller piece in that same order, wrapping
 from the smallest back to the biggest. It stays hidden when the open piece is not in the profile on screen,

@@ -101,6 +101,15 @@
   function biggest(pieces) {
     return order(pieces)[0] || null;
   }
+  // 0 iterations is unrefined. null, once the count has loaded, means the same and stays out of the list.
+  function refined(pieces) {
+    return (pieces || []).filter((p) => {
+      const value = p && p.iterations;
+      if (value == null || value === '') return false;
+      const n = typeof value === 'number' ? value : Number(String(value).trim());
+      return Number.isFinite(n) && n > 0;
+    });
+  }
   // step +1 is the next-smaller piece (the arrow). The list wraps, so the smallest leads back to the biggest.
   function stepPiece(pieces, currentId, step) {
     const sorted = order(pieces);
@@ -141,6 +150,6 @@
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
     plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
-    order, biggest, nextPiece, previousPiece,
+    order, biggest, refined, nextPiece, previousPiece,
   };
 })();
