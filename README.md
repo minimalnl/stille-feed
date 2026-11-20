@@ -3,7 +3,9 @@
 _(formerly "Quiet Feed" — lowercase Dutch for "quiet feed".)_
 
 Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo, tags),
-Burnt Pix owned by the profile, and the latest Forever Moments and Hup posts, sorted together by time.
+Burnt Pix owned by the profile, and Forever Moments and Hup posts, sorted together by time.
+The posts section opens with the two latest. Show more reveals the next ones. A small − on that
+section hides it (a + brings it back); the choice is remembered in `localStorage` as `qf.hideSocial`.
 At the bottom a small "tip the creator" block to mint 1-5 Generative Grid pieces (testnet for now).
 
 **Three themes:** Black, White, and Art (cream/sage, the default). A small square in the bottom-right
@@ -46,6 +48,7 @@ and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (
 in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from
 the opened piece: the next click is the next-smaller one, then on down, wrapping at the end.
 The document title names the iteration count only when a piece link is in the URL.
+The large picture is fetched before the profile, the posts, and the thumbnail grid. Those wait until it has loaded.
 
 Link-preview tags (`og:image`, `og:title`) are not generated per piece. GitHub Pages serves one `index.html`,
 and a crawler does not get different meta tags for a query string. Per-piece previews would need a static page

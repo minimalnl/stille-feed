@@ -18,12 +18,13 @@ const PAGE = 12;
 const BURNTPIX = '0x3983151e0442906000dab83c8b1cf3f2d2535f82'; // Burnt Pix (LSP8) op LUKSO mainnet
 const LSP4_METADATA = '9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e';
 const PIX_PAGE = 6;
+const FEED_FIRST = 2;
 const FEED_PAGE = 6;
 
 const $ = (s) => document.querySelector(s);
 const pix = { pieces: [], shown: 0, gen: 0, focusIds: [] };
 let focusSeq = 0;
-const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_PAGE, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
+const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_FIRST, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
@@ -87,24 +88,28 @@ function rpc(method, params) {
     if (rpcQueue.length === 1) setTimeout(flushRpc, 0);
   });
 }
+function sendRpc(part) {
+  return getJSON(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(part.map((c, id) => ({ jsonrpc: '2.0', id, method: c.method, params: c.params }))) }).then((res) => {
+    const byId = new Map((Array.isArray(res) ? res : [res]).map((r) => [r.id, r]));
+    part.forEach((c, id) => {
+      const r = byId.get(id);
+      if (!r) c.reject(new Error('No answer'));
+      else if (r.error) c.reject(new Error(r.error.message));
+      else c.resolve(r.result);
+    });
+  }).catch((e) => { part.forEach((c) => c.reject(e)); });
+}
 async function flushRpc() {
   const all = rpcQueue; rpcQueue = [];
-  for (let i = 0; i < all.length; i += 40) {
-    const part = all.slice(i, i + 40);
-    try {
-      const res = await getJSON(RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(part.map((c, id) => ({ jsonrpc: '2.0', id, method: c.method, params: c.params }))) });
-      const byId = new Map((Array.isArray(res) ? res : [res]).map((r) => [r.id, r]));
-      part.forEach((c, id) => {
-        const r = byId.get(id);
-        if (!r) c.reject(new Error('No answer'));
-        else if (r.error) c.reject(new Error(r.error.message));
-        else c.resolve(r.result);
-      });
-    } catch (e) { part.forEach((c) => c.reject(e)); }
-  }
+  for (let i = 0; i < all.length; i += 40) await sendRpc(all.slice(i, i + 40));
+}
+// The large picture must not wait in a batch behind the profile, the posts, or the rest of the collection.
+function rpcImmediate(method, params) {
+  return new Promise((resolve, reject) => { sendRpc([{ method, params, resolve, reject }]); });
 }
 const rpcCall = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+const rpcCallNow = (to, data) => rpcImmediate('eth_call', [{ to, data }, 'latest']);
 // ---------- LSP3 via LUKSO RPC ----------
 function decodeUrlFromValue(hex) {
   // ABI-encoded bytes -> raw value
@@ -179,8 +184,9 @@ const pixLink = (id) => `https://universaleverything.io/asset/${BURNTPIX}/tokenI
 async function loadPixIterations(id) {
   return Number(BigInt(await rpcCall('0x' + id.slice(-40), '0x4358d2be')));
 }
-async function loadPixMeta(id) {
-  const url = decodeUrlFromValue(await rpcCall(BURNTPIX, '0x16e023b3' + id.slice(2) + LSP4_METADATA));
+async function loadPixMeta(id, opts) {
+  const call = opts && opts.immediate ? rpcCallNow : rpcCall;
+  const url = decodeUrlFromValue(await call(BURNTPIX, '0x16e023b3' + id.slice(2) + LSP4_METADATA));
   const json = url.startsWith('data:') ? JSON.parse(url.slice(url.indexOf(',') + 1)) : await getJSON(ipfs(url));
   const md = json.LSP4Metadata || {};
   const img = (md.images || [])[0]?.[0]?.url || '';
@@ -206,7 +212,7 @@ function applyPixMeta(p, meta) {
   if (p.iterations == null && meta.iterations != null) p.iterations = meta.iterations;
   return p;
 }
-function ensurePixImg(p) {
+function ensurePixImg(p, opts) {
   const key = pixKey(p.id);
   if (p.img != null) {
     if (!pixMeta.has(key)) pixMeta.set(key, { img: p.img, link: p.link || pixLink(p.id), iterations: p.iterations });
@@ -214,7 +220,7 @@ function ensurePixImg(p) {
   }
   if (pixMeta.has(key)) return Promise.resolve(applyPixMeta(p, pixMeta.get(key)));
   if (pixMetaWait.has(key)) return pixMetaWait.get(key).then((meta) => applyPixMeta(p, meta));
-  const job = loadPixMeta(p.id).then((meta) => {
+  const job = loadPixMeta(p.id, opts).then((meta) => {
     const stored = { img: meta.img || '', link: meta.link || pixLink(p.id), iterations: meta.iterations };
     pixMeta.set(key, stored);
     for (const piece of pix.pieces) {
@@ -289,8 +295,41 @@ function showMorePix() {
 function noPieces(gen, address) {
   if (gen !== pix.gen || address !== state.address) return;
   if (PixLink.plan(safePixQuery()).kind === 'absent') hideFocus();
+  releaseHero();
+}
+// The large pix is the first thing a visitor should see. Profile, posts, and the thumbnail grid
+// wait on this gate until that image has loaded (or until it is clear there is no image).
+let heroGate = Promise.resolve();
+let releaseHeroGate = () => {};
+function holdHero() {
+  const token = {};
+  let open = false;
+  let resolve = () => {};
+  heroGate = new Promise((r) => { resolve = r; });
+  const finish = () => {
+    if (open || releaseHeroGate.token !== token) return;
+    open = true;
+    resolve();
+  };
+  finish.token = token;
+  releaseHeroGate = finish;
+  setTimeout(finish, 15000);
+}
+function releaseHero() { releaseHeroGate(); }
+function afterHero(fn) { const gate = heroGate; gate.then(fn); }
+function watchHeroImg(img) {
+  if (!img) return;
+  const finish = releaseHeroGate;
+  const done = () => finish();
+  if (img.complete && img.naturalWidth) done();
+  else {
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+  }
 }
 async function showPix(address) {
+  // A link that matches nothing has no large picture to wait for.
+  if (PixLink.plan(safePixQuery()).kind === 'bad') releaseHero();
   pix.gen++; pix.pieces = []; pix.shown = 0;
   const gen = pix.gen;
   const sec = $('#pixSection'); sec.hidden = true;
@@ -314,9 +353,13 @@ async function showPix(address) {
   $('#pixCount').textContent = pieces.length === 1 ? '1 piece' : `${pieces.length} pieces`;
   pix.pieces = PixLink.order(pieces);
   $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = '';
-  // Lead first, so the large picture occupies the screen before any thumbnail asks for its SVG.
+  // The large picture is chosen and fetched before any thumbnail asks for its SVG.
   applyProfileLead();
-  showMorePix();
+  afterHero(() => {
+    if (gen !== pix.gen || address !== state.address) return;
+    if (!pix.shown) showMorePix();
+    settleFocus();
+  });
 }
 
 // ---------- One Burnt Pix, from ?pix= or ?id=, or the profile's biggest ----------
@@ -378,7 +421,7 @@ function renderPixFocus(cards, owner) {
   const ownerHref = PixLink.ownerHref(location.href, owner);
   sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div>${note}` + cards.map((p) => {
     const img = p.img
-      ? `<a class="pix-shot" href="${esc(p.link)}" target="_blank" rel="noopener"><img src="${esc(p.img)}" alt="Burnt Pix" width="768" height="768" decoding="async"></a>`
+      ? `<a class="pix-shot" href="${esc(p.link)}" target="_blank" rel="noopener"><img src="${esc(p.img)}" alt="Burnt Pix" width="768" height="768" fetchpriority="high" decoding="async"></a>`
       : '<span class="pix-empty"></span>';
     const addr = PixLink.addressOf(p.id) || '';
     const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
@@ -402,6 +445,7 @@ function renderPixFocus(cards, owner) {
   syncNext();
   markOpenThumb();
   syncTitle(cards);
+  watchHeroImg(sec.querySelector('img'));
 }
 function writePixUrl(tokenId) {
   history.pushState(null, '', PixLink.pieceHref(location.href, tokenId, state.address));
@@ -418,16 +462,15 @@ function presentPix(p, owner, hist) {
     }
   };
   draw();
-  if (p.img == null) ensurePixImg(p).then(draw);
+  if (p.img == null) ensurePixImg(p, { immediate: true }).then(draw);
 }
 function applyProfileLead() {
   const plan = PixLink.plan(safePixQuery());
-  if (plan.kind === 'bad') return;
+  if (plan.kind === 'bad') { releaseHero(); return; }
   if (plan.kind === 'absent') {
     const top = PixLink.biggest(pix.pieces);
     if (top) presentPix(top, state.address, null);
-    else hideFocus();
-    settleFocus();
+    else { hideFocus(); releaseHero(); }
     return;
   }
   const found = PixLink.resolve(pix.pieces.map((p) => p.id), safePixQuery());
@@ -437,8 +480,7 @@ function applyProfileLead() {
   const seq = ++focusSeq;
   const draw = () => { if (seq === focusSeq) renderPixFocus(cards, state.address); };
   draw();
-  settleFocus();
-  Promise.all(cards.map((p) => (p.img == null ? ensurePixImg(p) : null))).then(draw);
+  Promise.all(cards.map((p) => (p.img == null ? ensurePixImg(p, { immediate: true }) : null))).then(draw);
 }
 function barePieceLink() {
   const plan = PixLink.plan(safePixQuery());
@@ -456,27 +498,32 @@ function movePix(step) {
   presentPix(nxt, state.address, 'push');
 }
 async function idsOf(address) {
-  const cachedPieces = await loadPixCache(address).catch(() => null);
-  if (cachedPieces) return cachedPieces.map((p) => p.id);
+  // Thumbs exist only for the default profile. Other collections go straight to the chain.
+  if (address === DEFAULT_ADDRESS) {
+    const cachedPieces = await loadPixCache(address).catch(() => null);
+    if (cachedPieces) return cachedPieces.map((p) => p.id);
+  }
   return cached('pixids:' + address, 10 * MIN, () => loadPixIds(address));
 }
-async function pieceFor(id) {
+// The picture and its iteration count come from one metadata read. That read goes out on its own,
+// ahead of the collection-wide iteration calls the arrow and the grid need later.
+async function pieceFor(id, opts) {
   const have = pix.pieces.find((p) => pixKey(p.id) === pixKey(id));
   if (have) {
-    await ensurePixImg(have);
+    await ensurePixImg(have, opts);
     return have;
   }
-  const it = await loadPixIterations(id).catch(() => null);
-  const p = { id, img: null, link: pixLink(id), iterations: it };
-  await ensurePixImg(p);
+  const p = { id, img: null, link: pixLink(id), iterations: null };
+  await ensurePixImg(p, opts);
   return p;
 }
 async function showPixFocus() {
   const q = safePixQuery();
   const plan = PixLink.plan(q);
   if (plan.kind === 'absent') { settleFocus(); return; }
+  holdHero();
   focusReady = false;
-  if (plan.kind === 'bad') { focusNote(PIX_MISS); settleFocus(); return; }
+  if (plan.kind === 'bad') { focusNote(PIX_MISS); releaseHero(); settleFocus(); return; }
   const seq = ++focusSeq;
   const sec = $('#pixFocus');
   if (sec) {
@@ -484,21 +531,28 @@ async function showPixFocus() {
     // Keep a picture already on screen (Back) instead of blanking it while the same collection resolves.
     if (!sec.querySelector('img')) sec.innerHTML = '<p class="note">One moment…</p>';
   }
+  // A full ?id= already names the token, so its picture starts now, on its own request.
+  // A short ?pix= still needs the collection list; that list starts immediately, and for Mark's
+  // collection it does not wait on the profile currently on screen.
+  const early = plan.kind === 'id' && PixLink.tokenIdFromAddress(plan.id)
+    ? pieceFor(PixLink.tokenIdFromAddress(plan.id), { immediate: true }) : null;
+  const profile = fallbackAddress();
+  const ownerIds = profile !== PixLink.OWNER ? idsOf(PixLink.OWNER) : null;
   try {
-    const profile = fallbackAddress();
     let owner = profile;
     let ids = await idsOf(profile);
     if (seq !== focusSeq) return;
     let found = PixLink.resolve(ids, q);
-    if (found.kind !== 'one' && found.kind !== 'many' && profile !== PixLink.OWNER) {
+    if (found.kind !== 'one' && found.kind !== 'many' && ownerIds) {
       owner = PixLink.OWNER;
-      ids = await idsOf(owner);
+      ids = await ownerIds;
       if (seq !== focusSeq) return;
       found = PixLink.resolve(ids, q);
     }
     if (found.kind !== 'one' && found.kind !== 'many') {
       if (seq !== focusSeq) return;
       focusNote(PIX_MISS);
+      releaseHero();
       if (!IN_FRAME && !state.address) show(fallbackAddress());
       settleFocus();
       return;
@@ -506,7 +560,8 @@ async function showPixFocus() {
     const cards = [];
     for (const id of found.ids) {
       if (seq !== focusSeq) return;
-      cards.push(await pieceFor(id));
+      const reuse = early && found.ids.length === 1 && plan.kind === 'id' && pixKey(id) === pixKey(PixLink.tokenIdFromAddress(plan.id));
+      cards.push(reuse ? await early : await pieceFor(id, { immediate: true }));
       if (seq !== focusSeq) return;
     }
     if (seq !== focusSeq) return;
@@ -514,11 +569,12 @@ async function showPixFocus() {
     // is the feed underneath, so the arrow can continue from this piece.
     const bareOwner = !IN_FRAME && barePieceLink() && owner === PixLink.OWNER && cards.length === 1;
     renderPixFocus(cards, owner);
-    if (!IN_FRAME && (!state.address || (bareOwner && state.address !== PixLink.OWNER))) show(bareOwner ? PixLink.OWNER : owner);
-    settleFocus();
+    const nextOwner = bareOwner ? PixLink.OWNER : owner;
+    if (!IN_FRAME && (!state.address || (bareOwner && state.address !== PixLink.OWNER))) show(nextOwner, { waitForHero: true });
+    afterHero(() => { if (seq === focusSeq) settleFocus(); });
   } catch (e) {
     console.warn('Burnt Pix link', e);
-    if (seq === focusSeq) { focusNote(PIX_LATER); if (!IN_FRAME && !state.address) show(fallbackAddress()); settleFocus(); }
+    if (seq === focusSeq) { focusNote(PIX_LATER); releaseHero(); if (!IN_FRAME && !state.address) show(fallbackAddress()); settleFocus(); }
   }
 }
 
@@ -690,6 +746,12 @@ function fetchBatch() {
   state.pending += jobs.length;
   return Promise.all(jobs);
 }
+function startPosts() {
+  if (!state.address || state.postsStarted) return;
+  state.postsStarted = true;
+  fetchBatch();
+  renderFeed();
+}
 // "Show more" after everything loaded is shown: fetch the next page from the sources that have one.
 async function loadMore() {
   state.notes = [];
@@ -698,14 +760,30 @@ async function loadMore() {
   await fetchBatch();
 }
 
-function show(address) {
-  Object.assign(state, { address, gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_PAGE,
-    fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] });
+function show(address, opts) {
+  const waitForHero = !!(opts && opts.waitForHero);
+  Object.assign(state, { address, gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_FIRST,
+    fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false });
   $('#formError').hidden = true;
   $('#addr').value = address;
-  $('#filters').hidden = false;
-  $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
-  $('#status').textContent = '';
+  const below = () => {
+    if (address !== state.address) return;
+    const social = $('#social');
+    if (social) social.hidden = false;
+    paintSocial(socialOpen);
+    $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
+    $('#feed').innerHTML = '';
+    $('#status').textContent = '';
+    loadProfile(address);
+    // The two posts wait until the large picture is up. A closed section stays quiet until it is opened.
+    if (socialOpen) startPosts();
+  };
+  // A piece link is already fetching its picture. Everything else waits until that picture is up.
+  // With no piece link, the profile's biggest picture is the thing fetched first.
+  if (waitForHero) afterHero(() => { if (address === state.address) { below(); showPix(address); } });
+  else { holdHero(); showPix(address); afterHero(below); }
+}
+function loadProfile(address) {
   loadLSP3(address).then((p) => { if (address === state.address) renderProfile(p, address); }).catch(async () => {
     if (address !== state.address) return;
     let isContract = false;
@@ -725,9 +803,6 @@ function show(address) {
         isContract ? ' · <a href="https://my.universalprofile.cloud" target="_blank" rel="noopener">Update profile in UP cloud ↗</a>' : ''
       }</p>`;
   });
-  showPix(address);
-  fetchBatch();
-  renderFeed();
 }
 
 // ---------- Which profile? ----------
@@ -797,10 +872,36 @@ $('#form').addEventListener('submit', (e) => {
   history.replaceState(null, '', u);
   show(addr);
 });
+const SOCIAL_KEY = 'qf.hideSocial';
+function socialStoredOpen() {
+  try { return localStorage.getItem(SOCIAL_KEY) !== '1'; } catch { return true; }
+}
+let socialOpen = socialStoredOpen();
+function paintSocial(open) {
+  const root = $('#social');
+  const btn = $('#socialToggle');
+  if (!root || !btn) return;
+  root.classList.toggle('is-shut', !open);
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.setAttribute('aria-label', open ? 'Hide posts' : 'Show posts');
+  const mark = btn.querySelector('span');
+  if (mark) mark.textContent = open ? '\u2212' : '+';
+}
+paintSocial(socialOpen);
+const socialToggle = $('#socialToggle');
+if (socialToggle) socialToggle.addEventListener('click', () => {
+  socialOpen = !socialOpen;
+  try {
+    if (socialOpen) localStorage.removeItem(SOCIAL_KEY);
+    else localStorage.setItem(SOCIAL_KEY, '1');
+  } catch {}
+  paintSocial(socialOpen);
+  if (socialOpen) startPosts();
+});
 $('#filters').addEventListener('click', (e) => {
   const f = e.target.dataset?.f; if (!f) return;
   state.filter = f;
-  state.feedShown = FEED_PAGE;
+  state.feedShown = FEED_FIRST;
   document.querySelectorAll('#filters button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
   renderFeed();
 });
@@ -867,9 +968,14 @@ showPixFocus().then(() => {
 });
 if (IN_FRAME) {
   $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
-  gridOwner(2500).then((owner) => { gridAddr = owner; show(owner || fallbackAddress()); });
+  gridOwner(2500).then((owner) => {
+    gridAddr = owner;
+    const kind = PixLink.plan(safePixQuery()).kind;
+    show(owner || fallbackAddress(), { waitForHero: kind === 'pix' || kind === 'id' });
+  });
 } else if (!barePieceLink()) {
-  show(fallbackAddress());
+  const kind = PixLink.plan(safePixQuery()).kind;
+  show(fallbackAddress(), { waitForHero: kind === 'pix' || kind === 'id' });
 }
 
 // ---------- Header hide/show (remembered, like the address) ----------
