@@ -1,0 +1,98 @@
+// Short Burnt Pix links. Run: node --test scripts/pix-link.test.mjs
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import test from 'node:test';
+import vm from 'node:vm';
+
+function loadPixLink() {
+  const sandbox = { console, URLSearchParams, URL };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../pix-link.js', import.meta.url), 'utf8'), sandbox, { filename: 'pix-link.js' });
+  return sandbox.PixLink;
+}
+// Objects built inside the vm have that realm's prototypes; compare their data.
+const data = (v) => JSON.parse(JSON.stringify(v));
+
+const PixLink = loadPixLink();
+const EXAMPLE = '0x0000000000000000000000009bf4ee85e0205431abcd06091ce98e65a48cd8e5';
+const EXAMPLE_ADDR = '9bf4ee85e0205431abcd06091ce98e65a48cd8e5';
+const OTHER = PixLink.tokenIdFromAddress('11111111e0205431abcd06091ce98e65a48cd8e5');
+const COLLIDE = PixLink.tokenIdFromAddress('9bf4ee85aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+
+test('the example token id is a padded address, and the short form is its first 8 hex chars', () => {
+  assert.equal(PixLink.OWNER, '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd');
+  assert.equal(PixLink.addressOf(EXAMPLE), EXAMPLE_ADDR);
+  assert.equal(PixLink.shortOf(EXAMPLE), '9bf4ee85');
+  assert.equal(PixLink.tokenIdFromAddress(EXAMPLE_ADDR), EXAMPLE);
+  assert.equal(PixLink.normalizePix('9BF4EE85'), '9bf4ee85');
+  assert.equal(PixLink.normalizePix('0x9bf4ee85'), '9bf4ee85');
+  assert.equal(PixLink.normalizeId(EXAMPLE_ADDR), EXAMPLE_ADDR);
+  assert.equal(PixLink.normalizeId(EXAMPLE), EXAMPLE_ADDR);
+  assert.equal(PixLink.normalizeId('0x' + EXAMPLE_ADDR.toUpperCase()), EXAMPLE_ADDR);
+});
+
+test('?pix= resolves one piece, and the leading zeros of the token id are not part of the prefix', () => {
+  const one = PixLink.resolve([OTHER, EXAMPLE], { pix: '9bf4ee85' });
+  assert.deepEqual(data(one), { kind: 'one', ids: [EXAMPLE] });
+  assert.equal(PixLink.resolve([EXAMPLE], { pix: '00000000' }).kind, 'none');
+  assert.equal(PixLink.resolve([EXAMPLE.toUpperCase()], { pix: '9bf4ee85' }).ids[0], EXAMPLE);
+});
+
+test('?id= is the whole address and wins over a different ?pix=', () => {
+  const byId = PixLink.resolve([OTHER, EXAMPLE], { id: EXAMPLE_ADDR, pix: '11111111' });
+  assert.deepEqual(data(byId), { kind: 'one', ids: [EXAMPLE] });
+  const full = PixLink.resolve([EXAMPLE], { id: EXAMPLE });
+  assert.deepEqual(data(full), { kind: 'one', ids: [EXAMPLE] });
+  const missing = PixLink.resolve([EXAMPLE], { id: OTHER.slice(2).slice(-40), pix: '9bf4ee85' });
+  assert.equal(missing.kind, 'none');
+});
+
+test('a broken ?id= falls through to ?pix=, and a broken ?pix= does not open a piece', () => {
+  assert.equal(PixLink.resolve([EXAMPLE], { id: 'nope', pix: '9bf4ee85' }).kind, 'one');
+  assert.equal(PixLink.resolve([EXAMPLE], { pix: '9bf4ee8' }).kind, 'bad');
+  assert.equal(PixLink.resolve([EXAMPLE], { pix: '9bf4ee85e' }).kind, 'bad');
+  assert.equal(PixLink.resolve([EXAMPLE], { pix: '9bf4ee8g' }).kind, 'bad');
+  assert.equal(PixLink.resolve([EXAMPLE], { id: '9bf4ee85' }).kind, 'bad');
+  assert.equal(PixLink.resolve([EXAMPLE], {}).kind, 'absent');
+  assert.equal(PixLink.resolve([EXAMPLE], { pix: '', id: '   ' }).kind, 'absent');
+});
+
+test('an ambiguous 8-hex prefix returns every match, in token-id order', () => {
+  const many = PixLink.resolve([EXAMPLE, OTHER, COLLIDE], { pix: '9bf4ee85' });
+  assert.equal(many.kind, 'many');
+  assert.deepEqual(data(many.ids), [COLLIDE, EXAMPLE]);
+});
+
+test('query reading and the owner link keep theme and drop the piece params', () => {
+  const q = PixLink.readQuery('?pix=9bf4ee85&theme=zwart&address=0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1');
+  assert.equal(q.pix, '9bf4ee85');
+  assert.equal(q.id, null);
+  const href = PixLink.ownerHref('https://minimalnl.github.io/stille-feed/?pix=9bf4ee85&theme=zwart&id=abc');
+  const u = new URL(href, 'https://minimalnl.github.io');
+  assert.equal(u.pathname, '/stille-feed/');
+  assert.equal(u.searchParams.get('address'), PixLink.OWNER);
+  assert.equal(u.searchParams.get('theme'), 'zwart');
+  assert.equal(u.searchParams.get('pix'), null);
+  assert.equal(u.searchParams.get('id'), null);
+});
+
+test('the page loads the linker and asks the feed to open a linked piece', () => {
+  const root = new URL('..', import.meta.url);
+  const html = fs.readFileSync(new URL('index.html', root), 'utf8');
+  const pix = html.indexOf('src="pix-link.js"');
+  const app = html.indexOf('src="app.js"');
+  assert.ok(pix !== -1 && app !== -1 && pix < app);
+  assert.match(html, /id="pixFocus"/);
+  const appjs = fs.readFileSync(new URL('app.js', root), 'utf8');
+  assert.match(appjs, /function showPixFocus\(/);
+  assert.match(appjs, /PixLink\.resolve/);
+  assert.match(appjs, /showPixFocus\(\)/);
+});
+
+test('iteration text matches the feed', () => {
+  assert.equal(PixLink.iterationsLabel(1500000), '1,500,000 iterations');
+  assert.equal(PixLink.iterationsLabel('1500000'), '1,500,000 iterations');
+  assert.equal(PixLink.iterationsLabel(0), '0 iterations');
+  assert.equal(PixLink.iterationsLabel(null), 'Burnt Pix');
+  assert.equal(PixLink.iterationsLabel(''), 'Burnt Pix');
+});

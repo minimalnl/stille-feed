@@ -18,6 +18,27 @@ Which profile is shown (first match wins):
 Typing an address and pressing View saves it (and puts it in the URL to share); View with an empty field
 forgets it. Inside the Grid a typed address also wins until the page reloads.
 
+One Burnt Pix from Mark's collection (`0x7070b7Cb8fAe99B6C7DDd0eaBe831DCb6c3047FD`) can be opened on its own.
+Each token id is 32 bytes: 12 zero bytes, then the 20-byte address of that piece's fractal contract.
+
+- `?pix=` — the first 8 hex characters of that address.
+  <https://minimalnl.github.io/stille-feed/?pix=9bf4ee85> opens token
+  `0x0000000000000000000000009bf4ee85e0205431abcd06091ce98e65a48cd8e5`.
+- `?id=` — all 40 hex characters of that address (the last 40 of the token id). A full 64-hex token id is
+  accepted too. <https://minimalnl.github.io/stille-feed/?id=9bf4ee85e0205431abcd06091ce98e65a48cd8e5>
+
+Both work next to `?address=` and `?theme=`. The piece is always resolved in that collection, not in whichever
+profile the feed is showing. The page shows the image large, the iteration count, a link to the piece on
+Universal Everything, and a link to the owner. An unknown or malformed value leaves the normal feed in place,
+with a short note. The 8-hex prefixes are unique across the collection today; if two pieces ever share one,
+every match is shown, ordered by token id.
+
+Link-preview tags (`og:image`, `og:title`) are not generated per piece. GitHub Pages serves one `index.html`,
+and a crawler does not get different meta tags for a query string. Per-piece previews would need a static page
+per pix (for example `/p/9bf4ee85/`) plus a raster image: each picture is an on-chain SVG of about 250 KB, and
+the collection is more than two thousand pieces. The thumbnail job only covers the one Burnt Pix on the default
+profile, so that workflow was not extended.
+
 Run locally:
 
     python3 serve.py 8080

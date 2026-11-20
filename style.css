@@ -94,6 +94,15 @@ body.chrome-off .chrome-toggle{margin-top:-40px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:2px}.grid .media{aspect-ratio:1/1}
 .item .text a{color:var(--sage-d)}
 
+.pixfocus{display:flex;flex-direction:column;gap:16px;margin:8px 0 40px}
+.pixfocus[hidden]{display:none}
+.pix-one{background:var(--card);border:1px solid var(--line);border-radius:0;overflow:hidden;color:var(--muted)}
+.pix-one a.pix-shot{display:block;border-radius:0;line-height:0;color:inherit}
+.pix-one img{display:block;width:100%;height:auto;border-radius:0;filter:none;background:var(--sand)}
+.pix-one-meta{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px 16px;padding:10px 14px;font-size:13px}
+.pix-links{display:flex;flex-wrap:wrap;gap:8px 14px}
+.pix-links a{color:var(--sage-d);text-decoration:none}
+.pix-links a:hover{text-decoration:underline}
 .pixsec{margin:0 0 56px}
 .sechead{display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 16px}
 .sechead h2{font-weight:400;font-size:18px;margin:0}
