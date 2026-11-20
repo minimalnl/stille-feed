@@ -1008,11 +1008,20 @@ if (pixBack) {
     const e = readEntry();
     const action = PixLink.backClick(
       e.pix, e.referrer, entryCurrentShort(), history.length, document.referrer, e.hist,
-      IN_FRAME, PixLink.plan(safePixQuery()).kind
+      IN_FRAME, PixLink.plan(safePixQuery()).kind, PixLink.exitFrom(location.search)
     );
     if (action.kind === 'piece') returnToEntry(action.pix);
     else if (action.kind === 'back') history.back();
     else if (action.kind === 'href' && action.href) location.href = action.href;
+    else if (action.kind === 'close') {
+      const href = action.href || '';
+      window.close();
+      setTimeout(() => {
+        if (window.closed) return;
+        if (href) location.href = href;
+        else history.back();
+      }, 400);
+    }
   });
 }
 const pixNext = $('#pixNext');

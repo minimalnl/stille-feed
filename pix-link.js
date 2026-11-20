@@ -170,6 +170,28 @@
     if (!pix) return null;
     return { pix, referrer: externalReferrer(referrer, pageHref) };
   }
+  // Optional &from=hup or &from=fm on a ?pix= link, for when the post strips document.referrer.
+  function exitFrom(search) {
+    const q = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+    const v = String(q.get('from') || '').trim().toLowerCase();
+    return v === 'hup' || v === 'fm' ? v : '';
+  }
+  function exitFallback(from, referrer) {
+    const tag = String(from || '').trim().toLowerCase();
+    let host = '';
+    try { if (referrer) host = new URL(referrer).hostname; } catch { host = ''; }
+    const hup = tag === 'hup' || host === 'hup.social' || host.endsWith('.hup.social');
+    if (hup) return 'https://hup.social';
+    const fm = tag === 'fm' || host === 'forevermoments.life' || host === 'www.forevermoments.life' || host.endsWith('.forevermoments.life');
+    if (fm) return 'https://www.forevermoments.life';
+    try {
+      if (referrer) {
+        const origin = new URL(referrer).origin;
+        if (origin && origin !== 'null') return origin;
+      }
+    } catch { /* no origin */ }
+    return '';
+  }
   // The live document.referrer still names the same site we stored at arrival.
   function referrerOriginMatches(stored, liveReferrer) {
     try {
@@ -179,7 +201,10 @@
       return !!a.origin && a.origin !== 'null' && a.origin === b.origin;
     } catch { return false; }
   }
-  // 'hidden' | 'piece' (return to the entry pix) | 'post' (leave for the referrer).
+  // 'hidden' | 'piece' (return to the entry pix) | 'post' (leave for the post).
+  // A ?pix= visit keeps exit on the entry pix too. Hup and Forever Moments often leave
+  // document.referrer empty (external-link warning, noreferrer, or a new tab), and hiding
+  // here is what made exit vanish after the first click back.
   // currentShort '*' means several pieces are open. '' means the picture is not drawn yet.
   function backSealMode(entryPix, referrer, currentShort, inFrame, linkKind) {
     const entry = normalizePix(entryPix);
@@ -188,25 +213,33 @@
     if (currentShort === '*') return 'piece';
     const cur = normalizePix(currentShort) || '';
     if (cur && cur !== entry) return 'piece';
-    return String(referrer || '').trim() ? 'post' : 'hidden';
+    return 'post';
   }
-  // On the entry pix, history.back() is the post only while this document is still the
-  // arrival history entry (nothing has been pushed since). After the arrow pushState's,
-  // the previous entry is another pix, so the stored referrer URL is the way out.
-  function backClick(entryPix, referrer, currentShort, historyLength, liveReferrer, entryHist, inFrame, linkKind) {
+  // On the entry pix: history.back() while this document is still the arrival history
+  // entry and the live referrer matches; otherwise the stored referrer URL. With no
+  // referrer, history.back() if the tab already had history at arrival, else close the
+  // tab and fall back to from= / the referrer origin.
+  function backClick(entryPix, referrer, currentShort, historyLength, liveReferrer, entryHist, inFrame, linkKind, from) {
     const mode = backSealMode(entryPix, referrer, currentShort, inFrame, linkKind);
     if (mode === 'piece') return { kind: 'piece', pix: normalizePix(entryPix) };
     if (mode !== 'post') return { kind: 'none' };
+    const ref = String(referrer || '').trim();
     const len = Number(historyLength);
-    const atArrival = Number(entryHist) > 1 && len === Number(entryHist);
-    if (atArrival && len > 1 && referrerOriginMatches(referrer, liveReferrer)) return { kind: 'back' };
-    return { kind: 'href', href: String(referrer) };
+    const arrival = Number(entryHist);
+    if (ref) {
+      const atArrival = arrival > 1 && len === arrival;
+      if (atArrival && len > 1 && referrerOriginMatches(ref, liveReferrer)) return { kind: 'back' };
+      return { kind: 'href', href: ref };
+    }
+    if (arrival > 1) return { kind: 'back' };
+    return { kind: 'close', href: exitFallback(from, ref) };
   }
 
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
     plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
     order, biggest, refined, nextPiece, previousPiece,
-    entryPixFromSearch, externalReferrer, entryRecord, referrerOriginMatches, backSealMode, backClick,
+    entryPixFromSearch, externalReferrer, entryRecord, exitFrom, exitFallback,
+    referrerOriginMatches, backSealMode, backClick,
   };
 })();
