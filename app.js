@@ -235,6 +235,68 @@ async function showPix(address) {
   await showMorePix();
 }
 
+// ---------- One Burnt Pix, from ?pix= or ?id= ----------
+// Looked up in Mark's collection (PixLink.OWNER), whichever profile the rest of the feed is showing.
+// A link that doesn't match just leaves a quiet note; the feed below is unchanged.
+const PIX_MISS = 'No Burnt Pix matches this link.';
+const PIX_LATER = 'This Burnt Pix can\'t be opened right now.';
+function focusNote(text) {
+  const sec = $('#pixFocus');
+  if (!sec) return;
+  sec.hidden = false;
+  sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div><p class="note">${esc(text)}</p>`;
+}
+function renderPixFocus(cards) {
+  const sec = $('#pixFocus');
+  sec.hidden = false;
+  const many = cards.length > 1;
+  const note = many ? '<p class="note">This short link matches more than one Burnt Pix. All of them are shown, in token-id order.</p>' : '';
+  const owner = PixLink.ownerHref(location.href);
+  sec.innerHTML = `<div class="sechead"><h2>Burnt Pix</h2></div>${note}` + cards.map((p) => {
+    const img = p.img
+      ? `<a class="pix-shot" href="${esc(p.link)}" target="_blank" rel="noopener"><img src="${esc(p.img)}" alt="Burnt Pix" width="768" height="768" decoding="async"></a>`
+      : '<span class="pix-empty"></span>';
+    const addr = PixLink.addressOf(p.id) || '';
+    const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
+    return `<article class="pix-one">${img}<div class="pix-one-meta"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(owner)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
+  }).join('');
+  // Theme can change after this renders; take the current URL when the owner link is used.
+  sec.querySelectorAll('a.pix-owner').forEach((a) => {
+    a.addEventListener('pointerdown', () => { a.href = PixLink.ownerHref(location.href); });
+  });
+  if (cards.length === 1) document.title = PixLink.iterationsLabel(cards[0].iterations) + ' · stille feed';
+}
+async function showPixFocus() {
+  let q;
+  try { q = PixLink.readQuery(location.search); } catch { return; }
+  const plan = PixLink.plan(q);
+  if (plan.kind === 'absent') return;
+  if (plan.kind === 'bad') { focusNote(PIX_MISS); return; }
+  const sec = $('#pixFocus');
+  if (sec) { sec.hidden = false; sec.innerHTML = '<p class="note">One moment…</p>'; }
+  try {
+    const ids = await cached('pixids:' + PixLink.OWNER, 10 * MIN, () => loadPixIds(PixLink.OWNER));
+    const found = PixLink.resolve(ids, q);
+    if (found.kind !== 'one' && found.kind !== 'many') { focusNote(PIX_MISS); return; }
+    const cards = await Promise.all(found.ids.map(async (id) => {
+      const [meta, it] = await Promise.all([
+        loadPixMeta(id).catch(() => null),
+        loadPixIterations(id).catch(() => null),
+      ]);
+      return {
+        id,
+        img: meta?.img || '',
+        link: (meta && meta.link) || pixLink(id),
+        iterations: it != null ? it : meta?.iterations,
+      };
+    }));
+    renderPixFocus(cards);
+  } catch (e) {
+    console.warn('Burnt Pix link', e);
+    focusNote(PIX_LATER);
+  }
+}
+
 // ---------- Forever Moments ----------
 async function loadMoments(address, offset) {
   const d = await getJSON(`${FM}/moments?owner=${address}&limit=${PAGE}&offset=${offset}`);
@@ -510,6 +572,7 @@ $('#filters').addEventListener('click', (e) => {
   renderFeed();
 });
 
+showPixFocus();
 if (IN_FRAME) {
   $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
   gridOwner(2500).then((owner) => { gridAddr = owner; show(owner || fallbackAddress()); });
