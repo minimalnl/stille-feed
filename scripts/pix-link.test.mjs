@@ -173,6 +173,10 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.doesNotMatch(appjs, /arrowTarget|bareEntry/);
   assert.match(appjs, /searchParams\.delete\('pix'\)/);
   assert.match(html, /id="pixNext"/);
+  assert.match(html, /id="chrome" class="chrome" hidden/);
+  assert.match(html, /id="chromeToggle"[^>]*aria-label="Show header"/);
+  assert.match(appjs, /saved === '0'/);
+  assert.doesNotMatch(appjs, /let hide = false/);
   assert.match(html, /id="ggHint"/);
   assert.match(html, /id="socialToggle"/);
   assert.match(html, /class="social-mark"/);
@@ -180,6 +184,8 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.doesNotMatch(html, /socialSkull|skull/);
   const css = fs.readFileSync(new URL('style.css', root), 'utf8');
   assert.match(css, /#e04b4b/);
+  assert.doesNotMatch(css, /\.pix-next\{[^}]*position:fixed/);
+  assert.doesNotMatch(css, /margin-top:-40px/);
   assert.match(html, /id="gg"[^>]*hidden/);
   assert.match(appjs, /FEED_FIRST = 2/);
   assert.match(appjs, /feedShown: FEED_FIRST/);
@@ -197,6 +203,38 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   const importAt = grid.indexOf('https://esm.sh/@noble/hashes');
   assert.ok(startAt !== -1 && importAt !== -1 && importAt < startAt);
   assert.match(grid.slice(startAt), /loadKeccak\(\)/);
+});
+
+test('the default view reads Moments and Hup from the bot profile', () => {
+  const appjs = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const start = appjs.indexOf('function socialFor');
+  const end = appjs.indexOf('function socialAddress');
+  assert.ok(start !== -1 && end > start);
+  const sandbox = {
+    DEFAULT_ADDRESS: '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd',
+    DEFAULT_SOCIAL_ADDRESS: '0x040045d5e3e6abe7ac243af2618f5483525a1491',
+    isAddr: (a) => /^0x[0-9a-fA-F]{40}$/.test(a || ''),
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(appjs.slice(start, end) + '\nthis.socialFor = socialFor;', sandbox);
+  const bot = sandbox.DEFAULT_SOCIAL_ADDRESS;
+  const mark = sandbox.DEFAULT_ADDRESS;
+  const other = '0x2c49607ac2f84d168188a8b7ae2e147e746a7788';
+  assert.equal(sandbox.socialFor(mark, null, '', null), bot);
+  assert.equal(sandbox.socialFor(mark, null, '', mark), bot);
+  assert.equal(sandbox.socialFor(mark, other, '', null), mark);
+  assert.equal(sandbox.socialFor(mark, null, mark, null), mark);
+  assert.equal(sandbox.socialFor(mark, null, other, null), mark);
+  assert.equal(sandbox.socialFor(mark, null, '', other), mark);
+  assert.equal(sandbox.socialFor(other, null, '', null), other);
+  assert.match(appjs, /DEFAULT_SOCIAL_ADDRESS = '0x040045d5e3e6abe7ac243af2618f5483525a1491'/);
+  assert.match(appjs, /loadMoments\(posts/);
+  assert.match(appjs, /loadHup\(posts/);
+  assert.match(appjs, /hup\.social\/\$\{esc\(state\.social \|\| state\.address\)\}/);
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /class="chrome-note"/);
+  assert.match(html, /Add stille feed to your/);
+  assert.match(html, /href="https:\/\/universaleverything\.io\/"/);
 });
 
 test('iteration text matches the feed', () => {

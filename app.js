@@ -1,5 +1,6 @@
 // stille feed: read-only feed of one Universal Profile (the Generative Grid block in grid-ad.js is the only wallet part).
 const DEFAULT_ADDRESS = '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd'; // Mark's collection (LUKSO mainnet UP)
+const DEFAULT_SOCIAL_ADDRESS = '0x040045d5e3e6abe7ac243af2618f5483525a1491'; // Mark's bot: Moments and Hup on the default view
 const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
 const FM = 'https://www.forevermoments.life/api/public/v1';
@@ -24,7 +25,7 @@ const FEED_PAGE = 6;
 const $ = (s) => document.querySelector(s);
 const pix = { pieces: [], shown: 0, gen: 0, focusIds: [] };
 let focusSeq = 0;
-const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_FIRST, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false };
+const state = { address: null, social: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_FIRST, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
@@ -43,6 +44,21 @@ const IPFS_GATEWAYS = [
 // Universal Everything's Envio indexer keeps a copy of LSP3 even when the CID is gone from IPFS.
 const INDEXER = 'https://envio.lukso-mainnet.universal.tech/v1/graphql';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
+// Implicit default view: no Grid owner, no ?address=, no saved address other than the collection.
+// Moments and Hup then come from the bot. Any chosen profile keeps its own posts.
+function socialFor(profile, grid, query, saved) {
+  const who = String(profile || '').toLowerCase();
+  if (who !== DEFAULT_ADDRESS) return who;
+  if (grid) return who;
+  if (isAddr(query)) return who;
+  if (saved && String(saved).toLowerCase() !== DEFAULT_ADDRESS) return who;
+  return DEFAULT_SOCIAL_ADDRESS;
+}
+function socialAddress(profile) {
+  let query = '';
+  try { query = new URLSearchParams(location.search).get('address') || ''; } catch {}
+  return socialFor(profile, gridAddr, query, store.get());
+}
 const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
 const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -705,7 +721,7 @@ function renderFeed() {
   const remaining = list.length - state.feedShown;
   const waiting = state.pending > 0;
   const hupNote = state.hupBlocked && state.filter !== 'moment' ? `<p class="note">Hup posts can't be loaded right now.
-    <a href="https://hup.social/${esc(state.address)}" target="_blank" rel="noopener">View them on Hup ↗</a></p>` : '';
+    <a href="https://hup.social/${esc(state.social || state.address)}" target="_blank" rel="noopener">View them on Hup ↗</a></p>` : '';
   $('#feed').innerHTML = hupNote + (shown.length ? shown.map((i) => `
     <article class="item">
       ${mediaHTML(i.images)}
@@ -735,11 +751,12 @@ function fetchBatch() {
   const add = (items) => { if (gen !== state.gen) return; state.items.push(...items); };
   const done = () => { if (gen !== state.gen) return; state.pending--; renderFeed(); };
   const jobs = [];
-  if (state.fmOffset === 0 || state.fmMore) jobs.push(loadMoments(state.address, state.fmOffset)
+  const posts = state.social || state.address;
+  if (state.fmOffset === 0 || state.fmMore) jobs.push(loadMoments(posts, state.fmOffset)
     .then((r) => { if (gen !== state.gen) return; state.fmOffset += PAGE; state.fmMore = r.more; add(r.items); })
     .catch(() => { if (gen !== state.gen) return; state.fmMore = false; state.notes.push('Forever Moments is unreachable right now.'); })
     .finally(done));
-  if (state.hupPage === 1 || state.hupMore) jobs.push(loadHup(state.address, state.hupPage)
+  if (state.hupPage === 1 || state.hupMore) jobs.push(loadHup(posts, state.hupPage)
     .then((r) => { if (gen !== state.gen) return; state.hupPage += 1; state.hupMore = r.more; add(r.items); })
     .catch(() => { if (gen !== state.gen) return; state.hupMore = false; if (state.hupPage === 1) state.hupBlocked = true; })
     .finally(done));
@@ -762,7 +779,7 @@ async function loadMore() {
 
 function show(address, opts) {
   const waitForHero = !!(opts && opts.waitForHero);
-  Object.assign(state, { address, gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_FIRST,
+  Object.assign(state, { address, social: socialAddress(address), gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_FIRST,
     fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false });
   $('#formError').hidden = true;
   $('#addr').value = address;
@@ -980,14 +997,22 @@ if (IN_FRAME) {
 (() => {
   const KEY = 'qf.hideHeader', btn = $('#chromeToggle');
   const apply = (hide) => {
-    $('#chrome').hidden = hide; btn.textContent = hide ? 'show header' : 'hide header';
-    btn.setAttribute('aria-expanded', String(!hide)); document.body.classList.toggle('chrome-off', hide);
+    $('#chrome').hidden = hide;
+    btn.setAttribute('aria-expanded', String(!hide));
+    btn.setAttribute('aria-label', hide ? 'Show header' : 'Hide header');
+    document.body.classList.toggle('chrome-off', hide);
   };
-  let hide = false; try { hide = localStorage.getItem(KEY) === '1'; } catch {}
+  // A missing key used to mean "shown", so a first visit and the Grid opened the header.
+  // Absent stays hidden. '0' is an explicit show, '1' an explicit hide.
+  let hide = true;
+  try {
+    const saved = localStorage.getItem(KEY);
+    if (saved === '0') hide = false;
+  } catch {}
   apply(hide);
   btn.addEventListener('click', () => {
     hide = !hide; apply(hide);
-    try { hide ? localStorage.setItem(KEY, '1') : localStorage.removeItem(KEY); } catch {}
+    try { localStorage.setItem(KEY, hide ? '1' : '0'); } catch {}
   });
 })();
 

@@ -7,6 +7,12 @@ Burnt Pix owned by the profile, and Forever Moments and Hup posts, sorted togeth
 The posts section opens with the two latest. Show more reveals the next ones. A small red seal
 beside the tabs hides it, and the same seal brings it back; the choice is remembered in
 `localStorage` as `qf.hideSocial`.
+The page header (title, address, View) starts hidden. The same red seal, under that block, shows it
+and hides it again. `qf.hideHeader` is `0` when a visitor has opened it and `1` when they have closed it;
+a missing key stays hidden. Inside it, one quiet line says the feed can be added to a LUKSO Grid.
+On that plain default view, Forever Moments and Hup are read from Mark's bot
+`0x040045d5e3e6abe7ac243af2618f5483525a1491`. The profile block and Burnt Pix stay on the collection.
+A Grid owner, a `?address=`, or a different saved address keeps those posts on that profile.
 At the bottom a small "tip the creator" block to mint 1-5 Generative Grid pieces (testnet for now).
 
 **Three themes:** Black, White, and Art (cream/sage, the default). A small square in the bottom-right
@@ -45,7 +51,7 @@ biggest". A piece with no iterations â€” 0, or empty once its count has loaded â
 it does not lead, it is not in the grid, and the arrow skips it. A direct `?pix=` or `?id=` link still opens that
 one piece. The Burnt Pix heading shows no count, and its Show more has no number. A thumbnail click opens that piece large and sets `?pix=` plus `?address=` via history, so Back
 works and the link can be shared. The View form clears `?pix=` and `?id=` when the address changes. The
-arrow on the right (and a horizontal swipe) moves to the next-smaller piece in that same order, wrapping
+arrow under the picture (and a horizontal swipe) moves to the next-smaller piece in that same order, wrapping
 from the smallest back to the biggest. It stays hidden when the open piece is not in the profile on screen,
 and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (no `?address=`) that resolves
 in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from
