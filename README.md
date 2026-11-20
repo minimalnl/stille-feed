@@ -12,9 +12,10 @@ The page header (title, address, View) starts hidden. On the right of the Burnt 
 (`#e04b4b`, white ×), and it stays red while the header is open.
 `qf.hideHeader` is `0` when a visitor has opened it and `1` when they have closed it;
 a missing key stays hidden. Inside the header, one quiet line says the feed can be added to a LUKSO Grid.
-On that plain default view, Forever Moments and Hup are read from Mark's bot
-`0x040045d5e3e6abe7ac243af2618f5483525a1491`. The profile block and Burnt Pix stay on the collection.
-A Grid owner, a `?address=`, or a different saved address keeps those posts on that profile.
+Whenever the shown profile is Mark's collection, Forever Moments and Hup are read from his bot
+`0x040045d5e3e6abe7ac243af2618f5483525a1491`, including when that collection is the Grid owner,
+a `?address=`, or the saved address. The profile block and Burnt Pix stay on the collection.
+Any other profile keeps its own posts.
 At the bottom a small "tip the creator" block to mint 1-5 Generative Grid pieces (testnet for now).
 
 **Three themes:** Black, White, and Art (cream/sage, the default). A small square in the bottom-right

@@ -1,6 +1,6 @@
 // stille feed: read-only feed of one Universal Profile (the Generative Grid block in grid-ad.js is the only wallet part).
 const DEFAULT_ADDRESS = '0x7070b7cb8fae99b6c7ddd0eabe831dcb6c3047fd'; // Mark's collection (LUKSO mainnet UP)
-const DEFAULT_SOCIAL_ADDRESS = '0x040045d5e3e6abe7ac243af2618f5483525a1491'; // Mark's bot: Moments and Hup on the default view
+const DEFAULT_SOCIAL_ADDRESS = '0x040045d5e3e6abe7ac243af2618f5483525a1491'; // Mark's bot: Moments and Hup whenever the collection is on screen
 const RPC = 'https://rpc.mainnet.lukso.network';
 const IPFS = 'https://api.universalprofile.cloud/ipfs/';
 const FM = 'https://www.forevermoments.life/api/public/v1';
@@ -44,20 +44,14 @@ const IPFS_GATEWAYS = [
 // Universal Everything's Envio indexer keeps a copy of LSP3 even when the CID is gone from IPFS.
 const INDEXER = 'https://envio.lukso-mainnet.universal.tech/v1/graphql';
 const isAddr = (a) => /^0x[0-9a-fA-F]{40}$/.test(a || '');
-// Implicit default view: no Grid owner, no ?address=, no saved address other than the collection.
-// Moments and Hup then come from the bot. Any chosen profile keeps its own posts.
-function socialFor(profile, grid, query, saved) {
+// Mark's collection always reads Moments and Hup from the bot: the plain page, his Grid,
+// ?address=, and a saved address. Every other profile keeps its own posts.
+function socialFor(profile) {
   const who = String(profile || '').toLowerCase();
-  if (who !== DEFAULT_ADDRESS) return who;
-  if (grid) return who;
-  if (isAddr(query)) return who;
-  if (saved && String(saved).toLowerCase() !== DEFAULT_ADDRESS) return who;
-  return DEFAULT_SOCIAL_ADDRESS;
+  return who === DEFAULT_ADDRESS ? DEFAULT_SOCIAL_ADDRESS : who;
 }
 function socialAddress(profile) {
-  let query = '';
-  try { query = new URLSearchParams(location.search).get('address') || ''; } catch {}
-  return socialFor(profile, gridAddr, query, store.get());
+  return socialFor(profile);
 }
 const short = (a) => a.slice(0, 6) + '…' + a.slice(-4);
 const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -633,15 +627,19 @@ function extractIPFSCID(data) {
 const hupImages = (media) => media.filter((m) => m.type === 'image' && m.cid).map((m) => 'ipfs://' + m.cid.replace(/^ipfs:\/\//, '')).slice(0, 4);
 // First choice: the posts straight from the Hup contract's events (content on IPFS). One eth_getLogs returns
 // all of them, so "Show more" pages through that list without any extra service.
-const hupLogs = new Map(); // address -> Promise<logs, newest first>
+const hupLogs = new Map(); // lowercased address -> Promise<logs, newest first>
 async function loadHupFromChain(address, page) {
-  if (!hupLogs.has(address)) {
-    hupLogs.set(address, rpc('eth_getLogs', [{
+  // The list is stored under the address that was queried. The collection view asks for the bot,
+  // so a list already fetched for 0x7070 is never reused there.
+  const who = String(address || '').toLowerCase();
+  if (!isAddr(who)) throw new Error('No Hup address');
+  if (!hupLogs.has(who)) {
+    hupLogs.set(who, rpc('eth_getLogs', [{
       address: HUP_CONTRACT, fromBlock: '0x1', toBlock: 'latest',
-      topics: [HUP_POST_EVENT, null, '0x000000000000000000000000' + address.slice(2).toLowerCase()],
-    }]).then((l) => (l || []).reverse()).catch((e) => { hupLogs.delete(address); throw e; }));
+      topics: [HUP_POST_EVENT, null, '0x000000000000000000000000' + who.slice(2)],
+    }]).then((l) => (l || []).reverse()).catch((e) => { hupLogs.delete(who); throw e; }));
   }
-  const all = await hupLogs.get(address);
+  const all = await hupLogs.get(who);
   const logs = all.slice((page - 1) * PAGE, page * PAGE);
   const posts = await Promise.all(logs.map(async (log) => {
     try {
@@ -785,6 +783,7 @@ async function loadMore() {
 
 function show(address, opts) {
   const waitForHero = !!(opts && opts.waitForHero);
+  hupSource = 'chain';
   Object.assign(state, { address, social: socialAddress(address), gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_FIRST,
     fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false });
   $('#formError').hidden = true;

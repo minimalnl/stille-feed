@@ -230,7 +230,7 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(grid.slice(startAt), /loadKeccak\(\)/);
 });
 
-test('the default view reads Moments and Hup from the bot profile', () => {
+test('the collection reads Moments and Hup from the bot in every context', () => {
   const appjs = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const start = appjs.indexOf('function socialFor');
   const end = appjs.indexOf('function socialAddress');
@@ -245,13 +245,17 @@ test('the default view reads Moments and Hup from the bot profile', () => {
   const bot = sandbox.DEFAULT_SOCIAL_ADDRESS;
   const mark = sandbox.DEFAULT_ADDRESS;
   const other = '0x2c49607ac2f84d168188a8b7ae2e147e746a7788';
-  assert.equal(sandbox.socialFor(mark, null, '', null), bot);
-  assert.equal(sandbox.socialFor(mark, null, '', mark), bot);
-  assert.equal(sandbox.socialFor(mark, other, '', null), mark);
-  assert.equal(sandbox.socialFor(mark, null, mark, null), mark);
-  assert.equal(sandbox.socialFor(mark, null, other, null), mark);
-  assert.equal(sandbox.socialFor(mark, null, '', other), mark);
-  assert.equal(sandbox.socialFor(other, null, '', null), other);
+  assert.equal(sandbox.socialFor(mark), bot);
+  assert.equal(sandbox.socialFor(mark, other, '', null), bot);
+  assert.equal(sandbox.socialFor(mark, null, mark, null), bot);
+  assert.equal(sandbox.socialFor(mark, null, other, null), bot);
+  assert.equal(sandbox.socialFor(mark, null, '', other), bot);
+  assert.equal(sandbox.socialFor(other), other);
+  assert.equal(sandbox.socialFor(other, mark, mark, mark), other);
+  assert.doesNotMatch(appjs.slice(start, end), /if \(grid\) return who/);
+  assert.match(appjs, /hupLogs\.get\(who\)/);
+  assert.doesNotMatch(appjs, /hupLogs\.get\(address\)/);
+  assert.doesNotMatch(appjs, /hupLogs\.get\(state\.address\)/);
   assert.match(appjs, /DEFAULT_SOCIAL_ADDRESS = '0x040045d5e3e6abe7ac243af2618f5483525a1491'/);
   assert.match(appjs, /loadMoments\(posts/);
   assert.match(appjs, /loadHup\(posts/);
