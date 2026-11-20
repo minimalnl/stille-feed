@@ -94,6 +94,19 @@ test('biggest is most iterations, then the lowest token id, and next wraps', () 
   assert.equal(PixLink.previousPiece(pieces, outside), null);
 });
 
+test('a bare-link arrow starts at the biggest, then walks down and wraps', () => {
+  const pieces = [
+    { id: EXAMPLE, iterations: 1500000 },
+    { id: OTHER, iterations: 7000000 },
+    { id: COLLIDE, iterations: 4000000 },
+  ];
+  assert.equal(PixLink.arrowTarget(pieces, EXAMPLE, 1, true).id, OTHER);
+  assert.equal(PixLink.arrowTarget(pieces, OTHER, 1, true).id, COLLIDE);
+  assert.equal(PixLink.arrowTarget(pieces, OTHER, 1, false).id, COLLIDE);
+  assert.equal(PixLink.arrowTarget(pieces, COLLIDE, 1, false).id, EXAMPLE);
+  assert.equal(PixLink.arrowTarget(pieces, EXAMPLE, -1, true).id, COLLIDE);
+});
+
 test('a piece link keeps the profile and the theme, and an owner link can name that owner', () => {
   const owner = '0xeccedbdad7dae297d1ef1134cca43cdfc2857bd1';
   const piece = PixLink.pieceHref('https://minimalnl.github.io/stille-feed/?theme=zwart&id=abc', EXAMPLE, owner);
@@ -124,7 +137,8 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(appjs, /showPixFocus\(\)/);
   assert.match(appjs, /PixLink\.biggest/);
   assert.match(appjs, /PixLink\.pieceHref/);
-  assert.match(appjs, /PixLink\.nextPiece/);
+  assert.match(appjs, /PixLink\.arrowTarget/);
+  assert.match(appjs, /barePieceLink/);
   assert.match(appjs, /searchParams\.delete\('pix'\)/);
   assert.match(html, /id="pixNext"/);
   assert.match(html, /id="ggHint"/);

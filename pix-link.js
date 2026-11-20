@@ -113,6 +113,16 @@
   }
   function nextPiece(pieces, currentId) { return stepPiece(pieces, currentId, 1); }
   function previousPiece(pieces, currentId) { return stepPiece(pieces, currentId, -1); }
+  // A bare ?pix= / ?id= link opens one piece in the middle of the collection.
+  // The first step forward starts the tour at the biggest; further steps walk down and wrap.
+  // If that piece already is the biggest, the first step moves on to the next-smaller one.
+  function arrowTarget(pieces, currentId, step, fromBareLink) {
+    if (fromBareLink && (step == null || step >= 0)) {
+      const top = biggest(pieces);
+      if (top && addressOf(top.id) !== addressOf(currentId)) return top;
+    }
+    return (step < 0 ? previousPiece : nextPiece)(pieces, currentId);
+  }
   function addressParam(owner) {
     const s = clean(owner || '');
     return /^[0-9a-f]{40}$/.test(s) ? '0x' + s : null;
@@ -141,6 +151,6 @@
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
     plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
-    order, biggest, nextPiece, previousPiece,
+    order, biggest, nextPiece, previousPiece, arrowTarget,
   };
 })();

@@ -407,6 +407,7 @@ function writePixUrl(tokenId) {
   history.pushState(null, '', PixLink.pieceHref(location.href, tokenId, state.address));
 }
 function presentPix(p, owner, hist) {
+  pix.bareEntry = false;
   const seq = ++focusSeq;
   if (hist === 'push') writePixUrl(p.id);
   const draw = () => {
@@ -440,10 +441,20 @@ function applyProfileLead() {
   settleFocus();
   Promise.all(cards.map((p) => (p.img == null ? ensurePixImg(p) : null))).then(draw);
 }
+function barePieceLink() {
+  const plan = PixLink.plan(safePixQuery());
+  if (plan.kind !== 'pix' && plan.kind !== 'id') return false;
+  try {
+    const address = new URLSearchParams(location.search).get('address');
+    return address == null || String(address).trim() === '';
+  } catch { return false; }
+}
 function movePix(step) {
   const id = pix.focusIds.length === 1 ? pix.focusIds[0] : null;
   if (!id || !pix.pieces.some((p) => pixKey(p.id) === pixKey(id))) return;
-  const nxt = step < 0 ? PixLink.previousPiece(pix.pieces, id) : PixLink.nextPiece(pix.pieces, id);
+  const fromBare = !!pix.bareEntry && !(step < 0);
+  pix.bareEntry = false;
+  const nxt = PixLink.arrowTarget(pix.pieces, id, step, fromBare);
   if (!nxt) return;
   presentPix(nxt, state.address, 'push');
 }
@@ -471,7 +482,11 @@ async function showPixFocus() {
   if (plan.kind === 'bad') { focusNote(PIX_MISS); settleFocus(); return; }
   const seq = ++focusSeq;
   const sec = $('#pixFocus');
-  if (sec) { sec.hidden = false; sec.innerHTML = '<p class="note">One moment…</p>'; }
+  if (sec) {
+    sec.hidden = false;
+    // Keep a picture already on screen (Back) instead of blanking it while the same collection resolves.
+    if (!sec.querySelector('img')) sec.innerHTML = '<p class="note">One moment…</p>';
+  }
   try {
     const profile = fallbackAddress();
     let owner = profile;
@@ -487,6 +502,8 @@ async function showPixFocus() {
     if (found.kind !== 'one' && found.kind !== 'many') {
       if (seq !== focusSeq) return;
       focusNote(PIX_MISS);
+      pix.bareEntry = false;
+      if (!IN_FRAME && !state.address) show(fallbackAddress());
       settleFocus();
       return;
     }
@@ -497,11 +514,16 @@ async function showPixFocus() {
       if (seq !== focusSeq) return;
     }
     if (seq !== focusSeq) return;
+    // A post link has no ?address=. When it resolves in Mark's collection, that collection
+    // is the feed underneath, and the first arrow step starts at its biggest piece.
+    const bareOwner = !IN_FRAME && barePieceLink() && owner === PixLink.OWNER && cards.length === 1;
+    pix.bareEntry = bareOwner;
     renderPixFocus(cards, owner);
+    if (!IN_FRAME && (!state.address || (bareOwner && state.address !== PixLink.OWNER))) show(bareOwner ? PixLink.OWNER : owner);
     settleFocus();
   } catch (e) {
     console.warn('Burnt Pix link', e);
-    if (seq === focusSeq) { focusNote(PIX_LATER); settleFocus(); }
+    if (seq === focusSeq) { focusNote(PIX_LATER); if (!IN_FRAME && !state.address) show(fallbackAddress()); settleFocus(); }
   }
 }
 
@@ -823,6 +845,11 @@ if (pixNext) pixNext.addEventListener('click', () => movePix(1));
   }, true);
 })();
 window.addEventListener('popstate', () => {
+  if (barePieceLink() && !IN_FRAME) {
+    showPixFocus();
+    return;
+  }
+  pix.bareEntry = false;
   const addr = fallbackAddress();
   if (addr !== state.address) {
     focusSeq++;
@@ -840,11 +867,14 @@ window.addEventListener('popstate', () => {
   showPixFocus();
 });
 
-showPixFocus();
+showPixFocus().then(() => {
+  if (state.address || IN_FRAME) return;
+  show(fallbackAddress());
+});
 if (IN_FRAME) {
   $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
   gridOwner(2500).then((owner) => { gridAddr = owner; show(owner || fallbackAddress()); });
-} else {
+} else if (!barePieceLink()) {
   show(fallbackAddress());
 }
 
