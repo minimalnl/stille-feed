@@ -132,13 +132,13 @@ body.chrome-off .wrap{padding-top:16px}
 .pix-cap{display:block;font-size:12px;padding:8px 12px}
 .pix:hover,.pix.on{border-color:var(--sage)}
 .pix-stage{display:block}
-.pix-nav{display:flex;justify-content:flex-end;align-items:center}
+.pix-nav{display:flex;justify-content:space-between;align-items:center}
 .pix-nav:not(:has(button:not([hidden]))){display:none}
-.pix-back{flex:none;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;color:var(--muted);opacity:.5;cursor:pointer;display:grid;place-items:center}
-.pix-back:hover,.pix-back:focus-visible,.pix-back:active{opacity:1}
+.pix-back{flex:none;height:44px;margin:0;padding:0;border:0;background:transparent;color:#e04b4b;font:inherit;font-size:13px;line-height:1;cursor:pointer}
+.pix-back:hover{color:#c73737}
 .pix-back:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
 .pix-back[hidden]{display:none}
-.pix-next{align-self:flex-end;width:44px;height:44px;margin:0;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center}
+.pix-next{align-self:flex-end;width:44px;height:44px;margin:0 0 0 auto;padding:0;border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center}
 .pix-next svg{width:18px;height:18px;display:block}
 .pix-next:hover,.pix-next:focus-visible{color:var(--ink)}
 .pix-next[hidden]{display:none}
