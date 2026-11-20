@@ -189,8 +189,15 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(css, /\.pix-next\{[^}]*border:0/);
   assert.match(css, /\.pix-next\{[^}]*color:var\(--muted\)/);
   assert.match(css, /\.pix-one a\.pix-shot,\.pix-one \.pix-empty\{[^}]*aspect-ratio:1\/1/);
-  assert.match(css, /\.chrome-toggle\{[^}]*color:#e04b4b/);
-  assert.doesNotMatch(css, /\.chrome-toggle[^{]*\{[^}]*#5F7556/);
+  assert.match(css, /\.chrome-toggle\{[^}]*color:var\(--muted\)/);
+  assert.match(css, /\.chrome-toggle\{[^}]*opacity:\.5/);
+  assert.match(css, /body\.chrome-off \.chrome-toggle:active\{color:#e04b4b/);
+  assert.match(css, /body:not\(\.chrome-off\) \.chrome-toggle\{color:#e04b4b/);
+  assert.match(css, /\.social-toggle\{[^}]*color:#e04b4b/);
+  assert.doesNotMatch(appjs, /class="tags"/);
+  assert.doesNotMatch(css, /\.tags\{/);
+  assert.doesNotMatch(css, /\.tag\{/);
+  assert.doesNotMatch(css, /--tag:/);
   const focus = html.slice(html.indexOf('id="pixFocus"'), html.indexOf('id="profile"'));
   assert.match(focus, /id="chromeToggle"/);
   assert.match(focus, /circle cx="12" cy="12" r="9\.8" fill="currentColor"/);

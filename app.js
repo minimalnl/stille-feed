@@ -155,7 +155,7 @@ async function fetchIpfsJson(url) {
   throw last || new Error('IPFS unreachable');
 }
 async function loadLSP3FromIndex(address) {
-  const query = `query($a:String!){ Profile(where:{id:{_eq:$a}}){ id name description tags profileImages { src width height url } } }`;
+  const query = `query($a:String!){ Profile(where:{id:{_eq:$a}}){ id name description profileImages { src width height url } } }`;
   const d = await getJSON(INDEXER, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ query, variables: { a: address.toLowerCase() } }),
@@ -165,13 +165,13 @@ async function loadLSP3FromIndex(address) {
   const imgs = [...(p.profileImages || [])].sort((a, b) => (a.width || 0) - (b.width || 0));
   const img = imgs.find((i) => (i.width || 0) >= 224) || imgs[imgs.length - 1];
   const raw = (img && (img.src || img.url)) || '';
-  return { name: p.name, description: p.description || '', tags: p.tags || [], image: raw ? sized(raw, 224) : '' };
+  return { name: p.name, description: p.description || '', image: raw ? sized(raw, 224) : '' };
 }
 function profileFromLSP3Json(json) {
   const p = json.LSP3Profile || json;
   const imgs = [...(p.profileImage || [])].sort((a, b) => (a.width || 0) - (b.width || 0));
   const img = imgs.find((i) => (i.width || 0) >= 224) || imgs[imgs.length - 1];
-  return { name: p.name, description: p.description, tags: p.tags || [], image: img ? sized(img.url, 224) : '' };
+  return { name: p.name, description: p.description, image: img ? sized(img.url, 224) : '' };
 }
 // Prefer on-chain VerifiableURI → IPFS. If the CID is missing (common after a flaky pin), fall back to the
 // LUKSO indexer that Universal Everything uses — same name and photo, without re-publishing.
@@ -701,8 +701,7 @@ function renderProfile(p, address) {
       <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
       <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener" title="Open on Universal Everything">profile ↗</a>
     </div>
-    ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}
-    ${p.tags.length ? `<div class="tags">${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}`;
+    ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}`;
 }
 // Feed column is max 672 px wide: request 720 / 1440 px (sharp on retina) instead of the original,
 // which can be several MB. If the resizer fails, the image falls back to the original once.

@@ -2,13 +2,14 @@
 
 _(formerly "Quiet Feed" — lowercase Dutch for "quiet feed".)_
 
-Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo, tags),
+Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo),
 Burnt Pix owned by the profile, and Forever Moments and Hup posts, sorted together by time.
 The posts section opens with the two latest. Show more reveals the next ones. A small red seal
 beside the tabs hides it, and the same seal brings it back; the choice is remembered in
 `localStorage` as `qf.hideSocial`.
-The page header (title, address, View) starts hidden. On the right of the Burnt Pix heading, the same
-red seal as hide-posts (`#e04b4b`, white ×) shows it and hides it again.
+The page header (title, address, View) starts hidden. On the right of the Burnt Pix heading, a quiet
+× seal (the theme’s muted ink, at half opacity) shows it. Hover, focus, or a tap turns that seal red
+(`#e04b4b`, white ×), and it stays red while the header is open.
 `qf.hideHeader` is `0` when a visitor has opened it and `1` when they have closed it;
 a missing key stays hidden. Inside the header, one quiet line says the feed can be added to a LUKSO Grid.
 On that plain default view, Forever Moments and Hup are read from Mark's bot
