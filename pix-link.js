@@ -147,9 +147,66 @@
     return `${u.pathname}${u.search}${u.hash}`;
   }
 
+  // A visit counts only when the URL was opened with a well-formed ?pix=.
+  // ?id= alone is a different link, and a Grid frame is not this trail.
+  function entryPixFromSearch(search) {
+    const decided = plan(readQuery(search));
+    return decided.kind === 'pix' ? decided.pix : '';
+  }
+  // Another site (a Hup post, a Forever Moment). Same-origin and empty referrers are not stored.
+  function externalReferrer(referrer, pageHref) {
+    const raw = String(referrer || '').trim();
+    if (!raw) return '';
+    try {
+      const ref = new URL(raw);
+      const page = new URL(pageHref);
+      if (!ref.origin || ref.origin === 'null' || ref.origin === page.origin) return '';
+      return ref.href;
+    } catch { return ''; }
+  }
+  function entryRecord(search, referrer, pageHref, inFrame) {
+    if (inFrame) return null;
+    const pix = entryPixFromSearch(search);
+    if (!pix) return null;
+    return { pix, referrer: externalReferrer(referrer, pageHref) };
+  }
+  // The live document.referrer still names the same site we stored at arrival.
+  function referrerOriginMatches(stored, liveReferrer) {
+    try {
+      if (!stored || !liveReferrer) return false;
+      const a = new URL(stored);
+      const b = new URL(liveReferrer);
+      return !!a.origin && a.origin !== 'null' && a.origin === b.origin;
+    } catch { return false; }
+  }
+  // 'hidden' | 'piece' (return to the entry pix) | 'post' (leave for the referrer).
+  // currentShort '*' means several pieces are open. '' means the picture is not drawn yet.
+  function backSealMode(entryPix, referrer, currentShort, inFrame, linkKind) {
+    const entry = normalizePix(entryPix);
+    if (inFrame || !entry) return 'hidden';
+    if (linkKind !== 'pix' && linkKind !== 'id') return 'hidden';
+    if (currentShort === '*') return 'piece';
+    const cur = normalizePix(currentShort) || '';
+    if (cur && cur !== entry) return 'piece';
+    return String(referrer || '').trim() ? 'post' : 'hidden';
+  }
+  // On the entry pix, history.back() is the post only while this document is still the
+  // arrival history entry (nothing has been pushed since). After the arrow pushState's,
+  // the previous entry is another pix, so the stored referrer URL is the way out.
+  function backClick(entryPix, referrer, currentShort, historyLength, liveReferrer, entryHist, inFrame, linkKind) {
+    const mode = backSealMode(entryPix, referrer, currentShort, inFrame, linkKind);
+    if (mode === 'piece') return { kind: 'piece', pix: normalizePix(entryPix) };
+    if (mode !== 'post') return { kind: 'none' };
+    const len = Number(historyLength);
+    const atArrival = Number(entryHist) > 1 && len === Number(entryHist);
+    if (atArrival && len > 1 && referrerOriginMatches(referrer, liveReferrer)) return { kind: 'back' };
+    return { kind: 'href', href: String(referrer) };
+  }
+
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
     plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
     order, biggest, refined, nextPiece, previousPiece,
+    entryPixFromSearch, externalReferrer, entryRecord, referrerOriginMatches, backSealMode, backClick,
   };
 })();
