@@ -459,19 +459,21 @@ globalThis.GGConnect = GGConnect;
   const box = document.getElementById('gg');
   if (!box || !C.address) return;
 
-  // Lightweight keccak256 implementation (will load from CDN)
+  // keccak256 is only used by "Fix images for UE", and only after the block is opened.
   let keccak256 = null;
-  (async () => {
-    try {
-      const { keccak_256 } = await import('https://esm.sh/@noble/hashes@1.3.3/sha3');
+  let keccakLoading = null;
+  function loadKeccak() {
+    if (keccak256 || keccakLoading) return;
+    keccakLoading = import('https://esm.sh/@noble/hashes@1.3.3/sha3').then(({ keccak_256 }) => {
       keccak256 = (data) => {
         const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
         return '0x' + Array.from(keccak_256(bytes)).map(b => b.toString(16).padStart(2, '0')).join('');
       };
-    } catch (e) {
+    }).catch((e) => {
+      keccakLoading = null;
       console.warn('keccak256 not loaded', e);
-    }
-  })();
+    });
+  }
 
   const MAX_QTY = 5;
   const TIER_SIZE = 100; // contract: price doubles every 100 (priceFor = BASE_PRICE << (n-1)/100)
@@ -1170,10 +1172,11 @@ globalThis.GGConnect = GGConnect;
   const headerBtn = el('ggHeader');
   if (headerBtn) headerBtn.onclick = () => setCollectionHeader();
 
-  // Nothing of this block loads (no RPC, no p5) until the visitor scrolls near the bottom.
+  // Nothing of this block loads (no RPC, no p5, no wallet lookup) until the visitor opens it.
   let started = false;
   function start() {
     if (started) return; started = true;
+    loadKeccak();
     Promise.all([loadScript(), previewFromUrl().catch(() => null)]).then(([s, seed]) => {
       st.script = s; draw(seed ?? randomSeed()); box.hidden = false;
     }).catch((e) => console.warn('Script not loaded', e));
@@ -1182,9 +1185,17 @@ globalThis.GGConnect = GGConnect;
     initProvider();
     render();
   }
-  const sentinel = document.querySelector('.foot') || box;
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) { io.disconnect(); start(); } }, { rootMargin: '600px 0px' });
-    io.observe(sentinel);
-  } else start();
+  const hint = document.getElementById('ggHint');
+  const closeBtn = el('ggClose');
+  function openGg() {
+    if (hint) { hint.hidden = true; hint.setAttribute('aria-expanded', 'true'); }
+    box.hidden = false;
+    start();
+  }
+  function closeGg() {
+    box.hidden = true;
+    if (hint) { hint.hidden = false; hint.setAttribute('aria-expanded', 'false'); }
+  }
+  if (hint) hint.addEventListener('click', openGg);
+  if (closeBtn) closeBtn.addEventListener('click', closeGg);
 })();

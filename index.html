@@ -32,6 +32,7 @@
   <button id="chromeToggle" class="chrome-toggle" type="button" aria-controls="chrome" aria-expanded="true">hide header</button>
 
   <section id="pixFocus" class="pixfocus" hidden aria-label="Burnt Pix"></section>
+  <button id="pixNext" class="pix-next" type="button" hidden aria-label="Next Burnt Pix"><span aria-hidden="true">→</span></button>
 
   <section id="profile" class="profile" aria-live="polite"></section>
 
@@ -50,10 +51,12 @@
   <section id="feed" class="feed" aria-live="polite"></section>
   <p id="status" class="status"></p>
 
+  <button id="ggHint" class="gg-hint" type="button" aria-expanded="false" aria-controls="gg"><span class="gg-mark" aria-hidden="true"></span>Generative Square</button>
   <aside id="gg" class="gg" hidden aria-label="Generative Square">
-    <div class="gg-art"><iframe id="ggArt" sandbox="allow-scripts" title="Generative Square, live preview" loading="lazy"></iframe>
+    <div class="gg-art"><iframe id="ggArt" sandbox="allow-scripts" title="Generative Square, live preview"></iframe>
       <button id="ggNew" class="gg-new" title="New preview" aria-label="New preview">↻</button></div>
     <div class="gg-info">
+      <button id="ggClose" class="gg-close" type="button">close</button>
       <span class="gg-label">Tip the creator</span>
       <h2>Generative Square</h2>
       <p class="gg-sub">One square, every mint its own seed. Script and seed live on&#8209;chain.</p>
@@ -83,9 +86,14 @@
 </main>
 
 <div class="theme-switch">
-  <button type="button" data-theme="zwart" aria-label="Zwart theme">Zwart</button>
-  <button type="button" data-theme="wit" aria-label="Wit theme">Wit</button>
-  <button type="button" data-theme="kunstobject" aria-label="Kunstobject theme" class="active">Kunstobject</button>
+  <button type="button" class="theme-toggle" aria-expanded="false" aria-controls="themeMenu" aria-label="Theme">
+    <span class="theme-swatch" aria-hidden="true"></span>
+  </button>
+  <div id="themeMenu" class="theme-menu" hidden>
+    <button type="button" data-theme="zwart" aria-label="Black theme">Black</button>
+    <button type="button" data-theme="wit" aria-label="White theme">White</button>
+    <button type="button" data-theme="kunstobject" aria-label="Art theme" class="active">Art</button>
+  </div>
 </div>
 
 <script src="pix-link.js" defer></script>

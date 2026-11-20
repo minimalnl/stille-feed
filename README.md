@@ -6,8 +6,9 @@ Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo, tags),
 Burnt Pix owned by the profile, and the latest Forever Moments and Hup posts, sorted together by time.
 At the bottom a small "tip the creator" block to mint 1-5 Generative Grid pieces (testnet for now).
 
-**Three themes:** Zwart (dark), Wit (light), Kunstobject (cream/sage, default). The theme switcher is
-in the bottom-right corner. Your choice persists across visits (localStorage + URL fallback).
+**Three themes:** Black, White, and Art (cream/sage, the default). A small square in the bottom-right
+opens the three choices upward. The saved values stay `zwart`, `wit`, and `kunstobject`
+(`localStorage` key `qf.theme`, and `?theme=`). `black`, `white`, and `art` are accepted and stored as those keys.
 
 Which profile is shown (first match wins):
 1. Inside the LUKSO Grid: the owner of that Grid (up-provider `contextAccounts`).
@@ -27,11 +28,22 @@ Each token id is 32 bytes: 12 zero bytes, then the 20-byte address of that piece
 - `?id=` — all 40 hex characters of that address (the last 40 of the token id). A full 64-hex token id is
   accepted too. <https://minimalnl.github.io/stille-feed/?id=9bf4ee85e0205431abcd06091ce98e65a48cd8e5>
 
-Both work next to `?address=` and `?theme=`. The piece is always resolved in that collection, not in whichever
-profile the feed is showing. The page shows the image large, the iteration count, a link to the piece on
-Universal Everything, and a link to the owner. An unknown or malformed value leaves the normal feed in place,
-with a short note. The 8-hex prefixes are unique across the collection today; if two pieces ever share one,
-every match is shown, ordered by token id.
+Both work next to `?address=` and `?theme=`. A link is resolved in the profile on screen first, then in Mark's
+collection, so `?pix=9bf4ee85` still opens when the feed is another profile. The page shows the image large,
+the iteration count, a link to the piece on Universal Everything, and a link to that piece's owner. The owner
+link opens their profile with their biggest Burnt Pix leading, and drops `?pix=` / `?id=`. An unknown or
+malformed value leaves the normal feed in place, with a short note, and does not substitute another piece.
+The 8-hex prefixes are unique across the collection today; if two pieces ever share one, every match is
+shown, ordered by token id.
+
+With no `?pix=` or `?id=`, the profile's biggest piece (most iterations, then the lowest token id) leads in
+the large view. That choice is not written into the URL, so the profile link keeps meaning "their current
+biggest". A thumbnail click opens that piece large and sets `?pix=` plus `?address=` via history, so Back
+works and the link can be shared. The View form clears `?pix=` and `?id=` when the address changes. The
+arrow on the right (and a horizontal swipe) moves to the next-smaller piece in that same order, wrapping
+from the smallest back to the biggest. It stays hidden when the open piece is not in the profile on screen,
+and when that profile has fewer than two pieces. The document title names the iteration count only when a
+piece link is in the URL.
 
 Link-preview tags (`og:image`, `og:title`) are not generated per piece. GitHub Pages serves one `index.html`,
 and a crawler does not get different meta tags for a query string. Per-piece previews would need a static page
@@ -62,7 +74,10 @@ Speed:
   (10 minutes for things that change, a week for IPFS content and block times).
 - Images go through api.universalprofile.cloud/image/<cid>?width=… (720 px for one image, 360 px in a grid,
   2x on retina; same format, so GIFs keep moving). If the resizer fails, the original loads.
-- The Generative Grid block (RPC, p5.js) only loads when you scroll near it.
+- The Generative Square block stays a small hint until it is opened. p5.js, the preview, and the mint
+  connection load only then.
+- Burnt Pix images below the first screen wait until their card is near the viewport. A piece already
+  shown large is not fetched a second time.
 
 Generative Grid (tip-the-creator block, `grid-ad.js`):
 - Pick 1-5 and mint. The contract has a single exact-price `mint()` per piece (no batch), so 3 pieces are
