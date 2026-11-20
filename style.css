@@ -134,7 +134,7 @@ body.chrome-off .wrap{padding-top:16px}
 .pix-stage{display:block}
 .pix-nav{display:flex;justify-content:space-between;align-items:center}
 .pix-nav:not(:has(button:not([hidden]))){display:none}
-.pix-back{flex:none;height:44px;margin:0;padding:0;border:0;background:transparent;color:#e04b4b;font:inherit;font-size:13px;line-height:1;cursor:pointer}
+.pix-back{flex:none;height:44px;margin:0 0 0 14px;padding:0;border:0;background:transparent;color:#e04b4b;font:inherit;font-size:13px;line-height:1;cursor:pointer}
 .pix-back:hover{color:#c73737}
 .pix-back:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
 .pix-back[hidden]{display:none}
