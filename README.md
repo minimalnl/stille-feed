@@ -51,7 +51,7 @@ biggest". A piece with no iterations â€” 0, or empty once its count has loaded â
 it does not lead, it is not in the grid, and the arrow skips it. A direct `?pix=` or `?id=` link still opens that
 one piece. The Burnt Pix heading shows no count, and its Show more has no number. A thumbnail click opens that piece large and sets `?pix=` plus `?address=` via history, so Back
 works and the link can be shared. The View form clears `?pix=` and `?id=` when the address changes. The
-arrow on the Burnt Pix heading (and a horizontal swipe) moves to the next-smaller piece in that same order, wrapping
+arrow on the Burnt Pix heading is a quiet green seal that turns full green on hover, focus, or tap. The arrow, and a horizontal swipe, move to the next-smaller piece in that same order, wrapping
 from the smallest back to the biggest. It stays hidden when the open piece is not in the profile on screen,
 and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (no `?address=`) that resolves
 in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from

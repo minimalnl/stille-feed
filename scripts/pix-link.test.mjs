@@ -185,7 +185,9 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   const css = fs.readFileSync(new URL('style.css', root), 'utf8');
   assert.match(css, /#e04b4b/);
   assert.doesNotMatch(css, /\.pix-next\{[^}]*position:fixed/);
-  assert.match(css, /\.pix-next\{[^}]*background:var\(--sage\)/);
+  assert.match(css, /\.pix-next\{[^}]*width:44px/);
+  assert.match(css, /pointer:fine\)\{\s*\.pix-next:hover\{color:#5F7556/);
+  assert.match(html, /id="pixNext"[\s\S]*?<circle cx="12" cy="12" r="9\.8" fill="currentColor"\/><path fill="#fff"/);
   assert.match(appjs, /function seatArrow/);
   assert.doesNotMatch(css, /margin-top:-40px/);
   assert.match(html, /id="gg"[^>]*hidden/);
