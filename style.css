@@ -65,7 +65,7 @@ body.chrome-off .chrome-toggle{margin-top:-40px}
 .filters button{border:0;background:none;color:var(--muted);font:inherit;font-size:14px;padding:6px 14px;border-radius:999px;cursor:pointer}
 .filters button.on{background:var(--sand);color:var(--ink)}
 .social-toggle{width:44px;height:44px;padding:0;border:0;border-radius:50%;background:transparent;color:#e04b4b;cursor:pointer;display:grid;place-items:center;flex:none}
-.social-mark{width:26px;height:26px;display:block}
+.social-mark{width:26px;height:26px;display:block;shape-rendering:geometricPrecision}
 .social-toggle:hover{color:#c73737}
 .social-toggle:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
 .social.is-shut .filters,.social.is-shut #socialBody{display:none}

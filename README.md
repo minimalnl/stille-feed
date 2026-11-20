@@ -4,8 +4,8 @@ _(formerly "Quiet Feed" — lowercase Dutch for "quiet feed".)_
 
 Read-only view of one LUKSO Universal Profile: LSP3 profile (name, photo, tags),
 Burnt Pix owned by the profile, and Forever Moments and Hup posts, sorted together by time.
-The posts section opens with the two latest. Show more reveals the next ones. A small red skull
-beside the tabs hides it, and the same skull brings it back; the choice is remembered in
+The posts section opens with the two latest. Show more reveals the next ones. A small red seal
+beside the tabs hides it, and the same seal brings it back; the choice is remembered in
 `localStorage` as `qf.hideSocial`.
 At the bottom a small "tip the creator" block to mint 1-5 Generative Grid pieces (testnet for now).
 
