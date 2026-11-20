@@ -46,6 +46,7 @@ and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (
 in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from
 the opened piece: the next click is the next-smaller one, then on down, wrapping at the end.
 The document title names the iteration count only when a piece link is in the URL.
+The large picture is fetched before the profile, the posts, and the thumbnail grid. Those wait until it has loaded.
 
 Link-preview tags (`og:image`, `og:title`) are not generated per piece. GitHub Pages serves one `index.html`,
 and a crawler does not get different meta tags for a query string. Per-piece previews would need a static page

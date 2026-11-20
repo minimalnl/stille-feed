@@ -136,6 +136,9 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(appjs, /showPixFocus\(\)/);
   assert.match(appjs, /PixLink\.biggest/);
   assert.match(appjs, /PixLink\.pieceHref/);
+  assert.match(appjs, /fetchpriority="high"/);
+  assert.match(appjs, /function holdHero\(/);
+  assert.match(appjs, /rpcImmediate/);
   assert.match(appjs, /PixLink\.nextPiece/);
   assert.match(appjs, /barePieceLink/);
   assert.doesNotMatch(appjs, /arrowTarget|bareEntry/);
