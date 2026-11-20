@@ -55,8 +55,16 @@ h1{font-weight:400;font-size:28px;letter-spacing:.01em;margin:0}
 .profile .ue{font-size:12px;font-weight:500;color:var(--btn-text);background:var(--sage);text-decoration:none;border:1px solid var(--sage);border-radius:6px;padding:4px 14px;letter-spacing:.02em}
 .profile .ue:hover{background:var(--sage-d);border-color:var(--sage-d);color:var(--btn-text-hover)}
 .chrome[hidden]{display:none}
-.chrome-toggle{width:44px;height:44px;margin:2px auto 4px;padding:0;border:0;border-radius:50%;background:transparent;color:#e04b4b;cursor:pointer;display:grid;place-items:center}
-.chrome-toggle:hover{color:#c73737}
+.chrome-toggle{flex:none;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;color:var(--muted);opacity:.5;cursor:pointer;display:grid;place-items:center}
+.chrome-toggle .seal-hide{display:none}
+@media (hover:hover) and (pointer:fine){
+  body.chrome-off .chrome-toggle:hover{color:#5F7556;opacity:1}
+}
+body.chrome-off .chrome-toggle:focus-visible,body.chrome-off .chrome-toggle:active{color:#5F7556;opacity:1}
+body:not(.chrome-off) .chrome-toggle{color:#e04b4b;opacity:1}
+body:not(.chrome-off) .chrome-toggle .seal-show{display:none}
+body:not(.chrome-off) .chrome-toggle .seal-hide{display:block}
+body:not(.chrome-off) .chrome-toggle:hover{color:#c73737}
 .chrome-toggle:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
 body.chrome-off .wrap{padding-top:16px}
 .profile .desc{max-width:520px;margin:14px auto 0;color:var(--desc);font-size:15px}
@@ -129,13 +137,10 @@ body.chrome-off .wrap{padding-top:16px}
 .pix-cap{display:block;font-size:12px;padding:8px 12px}
 .pix:hover,.pix.on{border-color:var(--sage)}
 .pix-stage{display:block}
-.pix-next{flex:none;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;color:var(--muted);opacity:.5;cursor:pointer;display:grid;place-items:center}
+.pix-next{align-self:flex-end;width:48px;height:48px;margin:0 2px 0 0;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--card);color:var(--ink);cursor:pointer;display:grid;place-items:center}
+.pix-next svg{width:26px;height:26px;display:block}
+.pix-next:hover,.pix-next:focus-visible{border-color:var(--sage)}
 .pix-next[hidden]{display:none}
-@media (hover:hover) and (pointer:fine){
-  .pix-next:hover{color:#5F7556;opacity:1}
-}
-.pix-next:focus-visible,.pix-next:active{color:#5F7556;opacity:1}
-.pix-next:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
 #pixFoot .more{margin-top:20px}
 .note{text-align:center;color:var(--muted);font-size:14px;background:var(--card);border:1px dashed var(--line);border-radius:var(--r);padding:16px 20px;margin:0}
 .note a{color:var(--sage-d)}
