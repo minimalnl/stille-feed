@@ -42,14 +42,20 @@
     <div id="pixFoot"></div>
   </section>
 
-  <nav class="filters" id="filters" hidden>
-    <button data-f="all">All</button>
-    <button data-f="moment" class="on">Moments</button>
-    <button data-f="hup">Hup</button>
-  </nav>
-
-  <section id="feed" class="feed" aria-live="polite"></section>
-  <p id="status" class="status"></p>
+  <section id="social" class="social" hidden>
+    <div class="social-head">
+      <nav class="filters" id="filters">
+        <button data-f="all">All</button>
+        <button data-f="moment" class="on">Moments</button>
+        <button data-f="hup">Hup</button>
+      </nav>
+      <button id="socialToggle" class="social-toggle" type="button" aria-expanded="true" aria-controls="socialBody" aria-label="Hide posts"><span aria-hidden="true">−</span></button>
+    </div>
+    <div id="socialBody">
+      <section id="feed" class="feed" aria-live="polite"></section>
+      <p id="status" class="status"></p>
+    </div>
+  </section>
 
   <button id="ggHint" class="gg-hint" type="button" aria-expanded="false" aria-controls="gg"><span class="gg-mark" aria-hidden="true"></span>Generative Square</button>
   <aside id="gg" class="gg" hidden aria-label="Generative Square">

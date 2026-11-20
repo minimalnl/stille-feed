@@ -18,12 +18,13 @@ const PAGE = 12;
 const BURNTPIX = '0x3983151e0442906000dab83c8b1cf3f2d2535f82'; // Burnt Pix (LSP8) op LUKSO mainnet
 const LSP4_METADATA = '9afb95cacc9f95858ec44aa8c3b685511002e30ae54415823f406128b85b238e';
 const PIX_PAGE = 6;
+const FEED_FIRST = 2;
 const FEED_PAGE = 6;
 
 const $ = (s) => document.querySelector(s);
 const pix = { pieces: [], shown: 0, gen: 0, focusIds: [] };
 let focusSeq = 0;
-const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_PAGE, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] };
+const state = { address: null, gen: 0, pending: 0, items: [], filter: 'moment', feedShown: FEED_FIRST, fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ipfs = (u) => !u ? '' : u.startsWith('ipfs://') ? IPFS + u.slice(7) : u.startsWith('/api/') ? 'https://hup.social' + u : u;
@@ -745,6 +746,12 @@ function fetchBatch() {
   state.pending += jobs.length;
   return Promise.all(jobs);
 }
+function startPosts() {
+  if (!state.address || state.postsStarted) return;
+  state.postsStarted = true;
+  fetchBatch();
+  renderFeed();
+}
 // "Show more" after everything loaded is shown: fetch the next page from the sources that have one.
 async function loadMore() {
   state.notes = [];
@@ -755,18 +762,21 @@ async function loadMore() {
 
 function show(address, opts) {
   const waitForHero = !!(opts && opts.waitForHero);
-  Object.assign(state, { address, gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_PAGE,
-    fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [] });
+  Object.assign(state, { address, gen: state.gen + 1, pending: 0, hupBlocked: false, items: [], feedShown: FEED_FIRST,
+    fmOffset: 0, fmMore: false, hupPage: 1, hupMore: false, notes: [], postsStarted: false });
   $('#formError').hidden = true;
   $('#addr').value = address;
   const below = () => {
     if (address !== state.address) return;
-    $('#filters').hidden = false;
+    const social = $('#social');
+    if (social) social.hidden = false;
+    paintSocial(socialOpen);
     $('#profile').innerHTML = `<div class="skeleton" style="width:112px;height:112px;border-radius:50%;margin:0 auto"></div>`;
+    $('#feed').innerHTML = '';
     $('#status').textContent = '';
     loadProfile(address);
-    fetchBatch();
-    renderFeed();
+    // The two posts wait until the large picture is up. A closed section stays quiet until it is opened.
+    if (socialOpen) startPosts();
   };
   // A piece link is already fetching its picture. Everything else waits until that picture is up.
   // With no piece link, the profile's biggest picture is the thing fetched first.
@@ -862,10 +872,36 @@ $('#form').addEventListener('submit', (e) => {
   history.replaceState(null, '', u);
   show(addr);
 });
+const SOCIAL_KEY = 'qf.hideSocial';
+function socialStoredOpen() {
+  try { return localStorage.getItem(SOCIAL_KEY) !== '1'; } catch { return true; }
+}
+let socialOpen = socialStoredOpen();
+function paintSocial(open) {
+  const root = $('#social');
+  const btn = $('#socialToggle');
+  if (!root || !btn) return;
+  root.classList.toggle('is-shut', !open);
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.setAttribute('aria-label', open ? 'Hide posts' : 'Show posts');
+  const mark = btn.querySelector('span');
+  if (mark) mark.textContent = open ? '\u2212' : '+';
+}
+paintSocial(socialOpen);
+const socialToggle = $('#socialToggle');
+if (socialToggle) socialToggle.addEventListener('click', () => {
+  socialOpen = !socialOpen;
+  try {
+    if (socialOpen) localStorage.removeItem(SOCIAL_KEY);
+    else localStorage.setItem(SOCIAL_KEY, '1');
+  } catch {}
+  paintSocial(socialOpen);
+  if (socialOpen) startPosts();
+});
 $('#filters').addEventListener('click', (e) => {
   const f = e.target.dataset?.f; if (!f) return;
   state.filter = f;
-  state.feedShown = FEED_PAGE;
+  state.feedShown = FEED_FIRST;
   document.querySelectorAll('#filters button').forEach((b) => b.classList.toggle('on', b.dataset.f === f));
   renderFeed();
 });

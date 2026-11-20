@@ -145,6 +145,11 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(appjs, /searchParams\.delete\('pix'\)/);
   assert.match(html, /id="pixNext"/);
   assert.match(html, /id="ggHint"/);
+  assert.match(html, /id="socialToggle"/);
+  assert.match(html, /id="gg"[^>]*hidden/);
+  assert.match(appjs, /FEED_FIRST = 2/);
+  assert.match(appjs, /feedShown: FEED_FIRST/);
+  assert.match(appjs, /qf\.hideSocial/);
   assert.match(html, /id="themeMenu"[^>]*hidden/);
   assert.match(html, />Black</);
   assert.match(html, />White</);
