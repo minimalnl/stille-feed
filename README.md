@@ -43,9 +43,9 @@ works and the link can be shared. The View form clears `?pix=` and `?id=` when t
 arrow on the right (and a horizontal swipe) moves to the next-smaller piece in that same order, wrapping
 from the smallest back to the biggest. It stays hidden when the open piece is not in the profile on screen,
 and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (no `?address=`) that resolves
-in Mark's collection shows that collection underneath, and the arrow with it. The first step forward opens
-the biggest piece, then continues down and wraps. The document title names the iteration count only when a
-piece link is in the URL.
+in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from
+the opened piece: the next click is the next-smaller one, then on down, wrapping at the end.
+The document title names the iteration count only when a piece link is in the URL.
 
 Link-preview tags (`og:image`, `og:title`) are not generated per piece. GitHub Pages serves one `index.html`,
 and a crawler does not get different meta tags for a query string. Per-piece previews would need a static page
