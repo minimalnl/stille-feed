@@ -7,9 +7,8 @@ Burnt Pix owned by the profile, and Forever Moments and Hup posts, sorted togeth
 The posts section opens with the two latest. Show more reveals the next ones. A small red seal
 beside the tabs hides it, and the same seal brings it back; the choice is remembered in
 `localStorage` as `qf.hideSocial`.
-The page header (title, address, View) starts hidden. On the right of the Burnt Pix heading, a quiet
-seal shows it: muted until hover, focus, or a tap, then a green seal (`#5F7556`) with a white +. While
-the header is open, that same spot is the red seal (`#e04b4b`) with a white ×, which closes it.
+The page header (title, address, View) starts hidden. On the right of the Burnt Pix heading, the same
+red seal as hide-posts (`#e04b4b`, white ×) shows it and hides it again.
 `qf.hideHeader` is `0` when a visitor has opened it and `1` when they have closed it;
 a missing key stays hidden. Inside the header, one quiet line says the feed can be added to a LUKSO Grid.
 On that plain default view, Forever Moments and Hup are read from Mark's bot
@@ -53,7 +52,7 @@ biggest". A piece with no iterations — 0, or empty once its count has loaded �
 it does not lead, it is not in the grid, and the arrow skips it. A direct `?pix=` or `?id=` link still opens that
 one piece. The Burnt Pix heading shows no count, and its Show more has no number. A thumbnail click opens that piece large and sets `?pix=` plus `?address=` via history, so Back
 works and the link can be shared. The View form clears `?pix=` and `?id=` when the address changes. The
-arrow sits just below the large pix, on the right. The arrow, and a horizontal swipe, move to the next-smaller piece in that same order, wrapping
+arrow sits just below the large pix, on the right: a small muted chevron, and the page stays where it is. The arrow, and a horizontal swipe, move to the next-smaller piece in that same order, wrapping
 from the smallest back to the biggest. It stays hidden when the open piece is not in the profile on screen,
 and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (no `?address=`) that resolves
 in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from
