@@ -884,8 +884,6 @@ function paintSocial(open) {
   root.classList.toggle('is-shut', !open);
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   btn.setAttribute('aria-label', open ? 'Hide posts' : 'Show posts');
-  const mark = btn.querySelector('span');
-  if (mark) mark.textContent = open ? '\u2212' : '+';
 }
 paintSocial(socialOpen);
 const socialToggle = $('#socialToggle');
