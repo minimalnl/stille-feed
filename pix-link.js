@@ -81,11 +81,13 @@
     const q = new URLSearchParams(String(search || '').replace(/^\?/, ''));
     return { pix: q.get('pix'), id: q.get('id') };
   }
+  // Millions with two decimals, so the caption stays one line. 1234567 is 1.23M, and
+  // counts under a million stay in M too: 850000 is 0.85M.
   function iterationsLabel(value) {
     if (value == null || value === '') return 'Burnt Pix';
     const n = typeof value === 'number' ? value : Number(String(value).trim());
     if (!Number.isFinite(n)) return 'Burnt Pix';
-    return n.toLocaleString('en-US') + ' iterations';
+    return (n / 1e6).toFixed(2) + 'M iterations';
   }
   // Most iterations first. Ties break on the token address, lowest first, so the leader is stable.
   function order(pieces) {

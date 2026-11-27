@@ -254,7 +254,7 @@ function pixCard(p) {
   const open = (pix.focusIds || []).some((id) => pixKey(id) === pixKey(p.id));
   const href = PixLink.pieceHref(location.href, p.id, state.address);
   const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy" decoding="async">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy" decoding="async">`) : '<span class="pix-empty"></span>';
-  const count = p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix';
+  const count = PixLink.iterationsLabel(p.iterations);
   const sale = priceSeal(p.id);
   return `<div class="pix${open ? ' on' : ''}" data-id="${esc(p.id)}"><a class="pix-open" href="${esc(href)}" title="View this Burnt Pix">${imgTag}</a><span class="pix-cap"><a class="pix-open" href="${esc(href)}">${esc(count)}</a>${sale ? `<span class="pix-cap-sale"> · ${sale}</span>` : ''}</span></div>`;
 }

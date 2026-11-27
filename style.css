@@ -118,7 +118,7 @@ body.chrome-off .wrap{padding-top:16px}
 .pix-one a.pix-shot,.pix-one .pix-empty{display:block;width:100%;aspect-ratio:1/1;border-radius:0;line-height:0;color:inherit}
 .pix-one img{display:block;width:100%;height:100%;aspect-ratio:1/1;object-fit:cover;border-radius:0;filter:none;background:var(--sand)}
 .pix-one-meta{display:flex;flex-direction:column;font-size:13px}
-.pix-one-lead{display:block;padding:10px 14px}
+.pix-one-lead{display:block;padding:10px 14px;white-space:nowrap}
 .pix-price{color:var(--muted);text-decoration:none}
 .pix-price:hover{text-decoration:underline}
 .pix-price:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
@@ -134,7 +134,7 @@ body.chrome-off .wrap{padding-top:16px}
 .pix > a.pix-open{display:block;color:inherit;text-decoration:none}
 .pix.skeleton{aspect-ratio:1/1;height:auto}
 .pix img,.pix-empty{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--sand)}
-.pix-cap{display:flex;flex-wrap:wrap;align-items:baseline;font-size:12px;padding:8px 12px}
+.pix-cap{display:flex;flex-wrap:nowrap;align-items:baseline;font-size:12px;padding:8px 12px;white-space:nowrap}
 .pix-cap a{color:inherit;text-decoration:none}
 .pix-cap a.pix-open,.pix-cap-sale{white-space:nowrap}
 .pix:hover,.pix.on{border-color:var(--sage)}

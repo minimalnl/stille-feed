@@ -219,7 +219,8 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(css, /\.pix-one-meta\{[^}]*flex-direction:column/);
   assert.match(css, /\.pix-links\{[^}]*border-top:1px solid var\(--line\)/);
   assert.match(css, /\.pix-cap\{[^}]*font-size:12px/);
-  assert.match(css, /\.pix-cap\{[^}]*flex-wrap:wrap/);
+  assert.match(css, /\.pix-cap\{[^}]*flex-wrap:nowrap/);
+  assert.match(css, /\.pix-one-lead\{[^}]*white-space:nowrap/);
   assert.match(css, /\.pix-cap a\.pix-open,\.pix-cap-sale\{[^}]*white-space:nowrap/);
   assert.doesNotMatch(css, /\.pix-tile/);
   assert.match(appjs, /class="pix-price"[^>]*target="_blank" rel="noopener"/);
@@ -229,7 +230,8 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   const cardFn = appjs.slice(appjs.indexOf('function pixCard'), appjs.indexOf('function armPixCard'));
   assert.match(cardFn, /<span class="pix-cap-sale"> · \$\{sale\}<\/span>/);
   assert.match(cardFn, /<\/a><span class="pix-cap">/);
-  assert.doesNotMatch(cardFn, /pix-tile|position:absolute/);
+  assert.match(cardFn, /PixLink\.iterationsLabel/);
+  assert.doesNotMatch(cardFn, /toLocaleString|pix-tile|position:absolute/);
   const focusFn = appjs.slice(appjs.indexOf('function renderPixFocus'), appjs.indexOf('function writePixUrl'));
   assert.match(focusFn, /\$\{sale \? ` · \$\{sale\}` : ''\}/);
   assert.match(focusFn, /Universal Everything ↗/);
@@ -370,10 +372,15 @@ test('Hup sale prices match the verified listing ids', () => {
   assert.equal(PixLink.listingFor('9a00fb84'), null);
 });
 
-test('iteration text matches the feed', () => {
-  assert.equal(PixLink.iterationsLabel(1500000), '1,500,000 iterations');
-  assert.equal(PixLink.iterationsLabel('1500000'), '1,500,000 iterations');
-  assert.equal(PixLink.iterationsLabel(0), '0 iterations');
+test('iteration text is millions with two decimals', () => {
+  assert.equal(PixLink.iterationsLabel(7000000), '7.00M iterations');
+  assert.equal(PixLink.iterationsLabel(4000000), '4.00M iterations');
+  assert.equal(PixLink.iterationsLabel(1234567), '1.23M iterations');
+  assert.equal(PixLink.iterationsLabel(1500000), '1.50M iterations');
+  assert.equal(PixLink.iterationsLabel('1500000'), '1.50M iterations');
+  assert.equal(PixLink.iterationsLabel(850000), '0.85M iterations');
+  assert.equal(PixLink.iterationsLabel(0), '0.00M iterations');
   assert.equal(PixLink.iterationsLabel(null), 'Burnt Pix');
   assert.equal(PixLink.iterationsLabel(''), 'Burnt Pix');
+  assert.equal(PixLink.iterationsLabel('nope'), 'Burnt Pix');
 });
