@@ -245,13 +245,18 @@ function ensurePixImg(p, opts) {
   pixMetaWait.set(key, job);
   return job.then((meta) => applyPixMeta(p, meta));
 }
+function priceSeal(id) {
+  const sale = PixLink.listingFor(id);
+  if (!sale) return '';
+  return `<a class="pix-price" href="${esc(sale.href)}" target="_blank" rel="noopener">${esc(sale.label)}</a>`;
+}
 function pixCard(p) {
   const open = (pix.focusIds || []).some((id) => pixKey(id) === pixKey(p.id));
   const href = PixLink.pieceHref(location.href, p.id, state.address);
   const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy" decoding="async">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy" decoding="async">`) : '<span class="pix-empty"></span>';
-  return `<a class="pix${open ? ' on' : ''}" href="${esc(href)}" data-id="${esc(p.id)}" title="View this Burnt Pix">
+  return `<div class="pix-tile"><a class="pix${open ? ' on' : ''}" href="${esc(href)}" data-id="${esc(p.id)}" title="View this Burnt Pix">
     ${imgTag}
-    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>`;
+    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>${priceSeal(p.id)}</div>`;
 }
 // The picture itself waits until the card is near the screen. Thumbs that are already filled in stay as they are.
 // Cards are not watched until the large view has taken its space: on a short first paint the grid is in
@@ -504,7 +509,7 @@ function renderPixFocus(cards, owner) {
       : '<span class="pix-empty"></span>';
     const addr = PixLink.addressOf(p.id) || '';
     const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
-    return `<article class="pix-one">${img}<div class="pix-one-meta"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(ownerHref)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
+    return `<article class="pix-one">${img}<div class="pix-one-meta"><span class="pix-one-lead"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span>${priceSeal(p.id)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(ownerHref)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
   }).join('');
   sec.querySelectorAll('a.pix-owner').forEach((a) => {
     a.addEventListener('pointerdown', () => { a.href = PixLink.ownerHref(location.href, owner); });

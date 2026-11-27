@@ -223,6 +223,11 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(appjs, /PixLink\.exitFrom\(location\.search\)/);
   assert.doesNotMatch(css, /\.pix-back\{[^}]*(width:44px|border-radius|opacity:\.5)/);
   assert.match(css, /\.pix-next\{[^}]*margin:0 0 0 auto/);
+  assert.match(css, /\.pix-price\{[^}]*border-radius:0/);
+  assert.match(css, /\.pix-price\{[^}]*color:var\(--muted\)/);
+  assert.match(appjs, /class="pix-price"[^>]*target="_blank" rel="noopener"/);
+  assert.match(appjs, /PixLink\.listingFor/);
+  assert.doesNotMatch(appjs.slice(appjs.indexOf('function priceSeal'), appjs.indexOf('function pixCard')), /eth_send|personal_sign|wallet/);
   assert.match(css, /\.social-toggle\{[^}]*color:#e04b4b/);
   assert.match(appjs, /qf\.entryPix/);
   assert.match(appjs, /hist === 'replace'/);
@@ -341,6 +346,21 @@ test('a ?pix= visit remembers an external referrer and chooses the back step', (
   assert.equal(PixLink.referrerOriginMatches(hup, 'https://hup.social/other'), true);
   assert.equal(PixLink.referrerOriginMatches(hup, moment), false);
   assert.equal(PixLink.referrerOriginMatches(hup, ''), false);
+});
+
+test('Hup sale prices match the verified listing ids', () => {
+  assert.equal(PixLink.HUP_LISTINGS.length, 3);
+  const fb84 = '0x00000000000000000000000026c8899b1ddd94a50b1f792283b03cef9a00fb84';
+  const b538 = '0x0000000000000000000000000d80e5735fa76f020d5eae3a8c01dea7674db538';
+  const fcdf = '0x0000000000000000000000008cb52d60b5e0d30dd3eb54c109f2033f846ffcdf';
+  assert.deepEqual(data(PixLink.listingFor(fb84)), { label: '75 LYX', href: 'https://hup.social/nfts/42/1724' });
+  assert.deepEqual(data(PixLink.listingFor(b538)), { label: '55 LYX', href: 'https://hup.social/nfts/42/1723' });
+  assert.deepEqual(data(PixLink.listingFor(fcdf)), { label: '125 LYX', href: 'https://hup.social/nfts/42/1722' });
+  assert.equal(PixLink.listingFor(fb84.toUpperCase()).label, '75 LYX');
+  assert.equal(PixLink.listingFor('26c8899b1ddd94a50b1f792283b03cef9a00fb84').href, 'https://hup.social/nfts/42/1724');
+  assert.equal(PixLink.listingFor(EXAMPLE), null);
+  assert.equal(PixLink.listingFor(''), null);
+  assert.equal(PixLink.listingFor('9a00fb84'), null);
 });
 
 test('iteration text matches the feed', () => {
