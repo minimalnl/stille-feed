@@ -254,9 +254,9 @@ function pixCard(p) {
   const open = (pix.focusIds || []).some((id) => pixKey(id) === pixKey(p.id));
   const href = PixLink.pieceHref(location.href, p.id, state.address);
   const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy" decoding="async">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy" decoding="async">`) : '<span class="pix-empty"></span>';
-  return `<a class="pix${open ? ' on' : ''}" href="${esc(href)}" data-id="${esc(p.id)}" title="View this Burnt Pix">
-    ${imgTag}
-    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>`;
+  const count = PixLink.iterationsLabel(p.iterations);
+  const sale = priceSeal(p.id);
+  return `<div class="pix${open ? ' on' : ''}" data-id="${esc(p.id)}"><a class="pix-open" href="${esc(href)}" title="View this Burnt Pix">${imgTag}</a><span class="pix-cap"><a class="pix-open" href="${esc(href)}">${esc(count)}</a>${sale ? `<span class="pix-cap-sale"> · ${sale}</span>` : ''}</span></div>`;
 }
 // The picture itself waits until the card is near the screen. Thumbs that are already filled in stay as they are.
 // Cards are not watched until the large view has taken its space: on a short first paint the grid is in
@@ -460,7 +460,7 @@ function pinHere(y) {
 function returnToEntry(short) {
   const y = window.scrollY;
   const piece = pix.pieces.find((p) => PixLink.shortOf(p.id) === short);
-  if (piece) presentPix(piece, state.address || PixLink.OWNER, 'replace');
+  if (piece) presentPix(piece, 'replace');
   else {
     const u = new URL(location.href);
     u.searchParams.set('pix', short);
@@ -493,14 +493,13 @@ function focusNote(text) {
   markOpenThumb();
   document.title = 'stille feed';
 }
-function renderPixFocus(cards, owner) {
+function renderPixFocus(cards) {
   const sec = $('#pixFocus');
   if (!sec) return;
   sec.hidden = false;
   pix.focusIds = cards.map((p) => p.id);
   const many = cards.length > 1;
   const note = many ? '<p class="note">This short link matches more than one Burnt Pix. All of them are shown, in token-id order.</p>' : '';
-  const ownerHref = PixLink.ownerHref(location.href, owner);
   const body = $('#pixBody');
   if (!body) return;
   body.innerHTML = note + cards.map((p) => {
@@ -509,23 +508,9 @@ function renderPixFocus(cards, owner) {
       : '<span class="pix-empty"></span>';
     const addr = PixLink.addressOf(p.id) || '';
     const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
-    return `<article class="pix-one">${img}<div class="pix-one-meta"><span class="pix-one-lead"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span>${priceSeal(p.id)}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a><a class="pix-owner" href="${esc(ownerHref)}" title="Open the owner's profile">owner ↗</a></span></div></article>`;
+    const sale = priceSeal(p.id);
+    return `<article class="pix-one">${img}<div class="pix-one-meta"><span class="pix-one-lead"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span>${sale ? ` · ${sale}` : ''}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a></span></div></article>`;
   }).join('');
-  sec.querySelectorAll('a.pix-owner').forEach((a) => {
-    a.addEventListener('pointerdown', () => { a.href = PixLink.ownerHref(location.href, owner); });
-    a.addEventListener('click', (e) => {
-      if (!plainClick(e)) return;
-      const who = String(owner || '').toLowerCase();
-      if (who && who !== String(state.address || '').toLowerCase()) return;
-      e.preventDefault();
-      if (PixLink.plan(safePixQuery()).kind === 'absent') return;
-      history.pushState(null, '', PixLink.ownerHref(location.href, owner));
-      const top = PixLink.biggest(pix.pieces);
-      if (top) presentPix(top, state.address, null);
-      else hideFocus();
-      sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
   syncNext();
   syncBackSeal();
   markOpenThumb();
@@ -535,13 +520,13 @@ function renderPixFocus(cards, owner) {
 function writePixUrl(tokenId) {
   history.pushState(null, '', PixLink.pieceHref(location.href, tokenId, state.address));
 }
-function presentPix(p, owner, hist) {
+function presentPix(p, hist) {
   const seq = ++focusSeq;
   if (hist === 'replace') history.replaceState(null, '', PixLink.pieceHref(location.href, p.id, state.address));
   else if (hist === 'push' || hist === 'stay') writePixUrl(p.id);
   const draw = () => {
     if (seq !== focusSeq) return;
-    renderPixFocus([p], owner);
+    renderPixFocus([p]);
     // A thumbnail is opened from further down the page, so bring that picture up.
     // The next arrow stays where the visitor already is.
     if (hist === 'push') {
@@ -557,7 +542,7 @@ function applyProfileLead() {
   if (plan.kind === 'bad') { releaseHero(); return; }
   if (plan.kind === 'absent') {
     const top = PixLink.biggest(pix.pieces);
-    if (top) presentPix(top, state.address, null);
+    if (top) presentPix(top, null);
     else { hideFocus(); releaseHero(); }
     return;
   }
@@ -566,7 +551,7 @@ function applyProfileLead() {
   const cards = found.ids.map((id) => pix.pieces.find((p) => pixKey(p.id) === pixKey(id))).filter(Boolean);
   if (!cards.length) return;
   const seq = ++focusSeq;
-  const draw = () => { if (seq === focusSeq) renderPixFocus(cards, state.address); };
+  const draw = () => { if (seq === focusSeq) renderPixFocus(cards); };
   draw();
   Promise.all(cards.map((p) => (p.img == null ? ensurePixImg(p, { immediate: true }) : null))).then(draw);
 }
@@ -583,7 +568,7 @@ function movePix(step) {
   if (!id || !pix.pieces.some((p) => pixKey(p.id) === pixKey(id))) return;
   const nxt = step < 0 ? PixLink.previousPiece(pix.pieces, id) : PixLink.nextPiece(pix.pieces, id);
   if (!nxt) return;
-  presentPix(nxt, state.address, 'stay');
+  presentPix(nxt, 'stay');
 }
 async function idsOf(address) {
   // Thumbs exist only for the default profile. Other collections go straight to the chain.
@@ -656,7 +641,7 @@ async function showPixFocus() {
     // A post link has no ?address=. When it resolves in Mark's collection, that collection
     // is the feed underneath, so the arrow can continue from this piece.
     const bareOwner = !IN_FRAME && barePieceLink() && owner === PixLink.OWNER && cards.length === 1;
-    renderPixFocus(cards, owner);
+    renderPixFocus(cards);
     const nextOwner = bareOwner ? PixLink.OWNER : owner;
     if (!IN_FRAME && (!state.address || (bareOwner && state.address !== PixLink.OWNER))) show(nextOwner, { waitForHero: true });
     afterHero(() => { if (seq === focusSeq) settleFocus(); });
@@ -1000,12 +985,13 @@ $('#filters').addEventListener('click', (e) => {
 });
 
 $('#pixGrid').addEventListener('click', (e) => {
-  const a = e.target.closest('a.pix');
-  if (!a || !plainClick(e)) return;
-  const p = pix.pieces.find((x) => pixKey(x.id) === pixKey(a.dataset.id));
+  if (e.target.closest('a.pix-price')) return;
+  const card = e.target.closest('#pixGrid .pix');
+  if (!card || !plainClick(e)) return;
+  const p = pix.pieces.find((x) => pixKey(x.id) === pixKey(card.dataset.id));
   if (!p) return;
   e.preventDefault();
-  presentPix(p, state.address, 'push');
+  presentPix(p, 'push');
 });
 const pixBack = $('#pixBack');
 if (pixBack) {
@@ -1080,7 +1066,7 @@ window.addEventListener('popstate', () => {
   const plan = PixLink.plan(safePixQuery());
   if (plan.kind === 'absent') {
     const top = PixLink.biggest(pix.pieces);
-    if (top) presentPix(top, state.address, null);
+    if (top) presentPix(top, null);
     else hideFocus();
     settleFocus();
     return;

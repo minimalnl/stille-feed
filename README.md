@@ -42,8 +42,7 @@ Each token id is 32 bytes: 12 zero bytes, then the 20-byte address of that piece
 
 Both work next to `?address=` and `?theme=`. A link is resolved in the profile on screen first, then in Mark's
 collection, so `?pix=9bf4ee85` still opens when the feed is another profile. The page shows the image large,
-the iteration count, a link to the piece on Universal Everything, and a link to that piece's owner. The owner
-link opens their profile with their biggest Burnt Pix leading, and drops `?pix=` / `?id=`. An unknown or
+the iteration count, and a link to the piece on Universal Everything. An unknown or
 malformed value leaves the normal feed in place, with a short note, and does not substitute another piece.
 The 8-hex prefixes are unique across the collection today; if two pieces ever share one, every match is
 shown, ordered by token id.
@@ -59,7 +58,7 @@ from the smallest back to the biggest. It stays hidden when the open piece is no
 and when that profile has fewer than two pieces. A bare `?pix=` or `?id=` link (no `?address=`) that resolves
 in Mark's collection shows that collection underneath, and the arrow with it. The arrow continues from
 the opened piece: the next click is the next-smaller one, then on down, wrapping at the end.
-Three of Mark's pieces are listed on Hup. When one of those is open in the large view, a quiet price (`75 LYX`, `55 LYX`, or `125 LYX`) sits by the iteration count in the same secondary text. It opens that listing on Hup. The prices live in `HUP_LISTINGS` in `pix-link.js`.
+Three of Mark's pieces are listed on Hup. Iteration counts are shown as millions with two decimals (`7.00M`, `1.23M`, and `0.85M` for 850,000). On a listed piece the price (`75 LYX`, `55 LYX`, or `125 LYX`) sits on that same line, in the large view and under the thumbnail: `7.00M iterations · 125 LYX`. It opens that listing on Hup. A hairline separates that line from the Universal Everything link. The prices live in `HUP_LISTINGS` in `pix-link.js`.
 The document title names the iteration count only when a piece link is in the URL.
 The large picture is fetched before the profile, the posts, and the thumbnail grid. Those wait until it has loaded.
 

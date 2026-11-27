@@ -81,11 +81,13 @@
     const q = new URLSearchParams(String(search || '').replace(/^\?/, ''));
     return { pix: q.get('pix'), id: q.get('id') };
   }
+  // Millions with two decimals, so the caption stays one line. 1234567 is 1.23M, and
+  // counts under a million stay in M too: 850000 is 0.85M.
   function iterationsLabel(value) {
     if (value == null || value === '') return 'Burnt Pix';
     const n = typeof value === 'number' ? value : Number(String(value).trim());
     if (!Number.isFinite(n)) return 'Burnt Pix';
-    return n.toLocaleString('en-US') + ' iterations';
+    return (n / 1e6).toFixed(2) + 'M iterations';
   }
   // Most iterations first. Ties break on the token address, lowest first, so the leader is stable.
   function order(pieces) {
@@ -125,14 +127,6 @@
   function addressParam(owner) {
     const s = clean(owner || '');
     return /^[0-9a-f]{40}$/.test(s) ? '0x' + s : null;
-  }
-  // Same-site link to a profile, without a piece selected, so that profile's biggest pix leads.
-  function ownerHref(href, owner) {
-    const u = new URL(href, 'https://minimalnl.github.io');
-    u.searchParams.set('address', addressParam(owner) || OWNER);
-    u.searchParams.delete('pix');
-    u.searchParams.delete('id');
-    return `${u.pathname}${u.search}${u.hash}`;
   }
   // Shareable link to one piece. Uses the short ?pix= form and keeps the profile in ?address=.
   function pieceHref(href, tokenId, owner) {
@@ -254,7 +248,7 @@
 
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
-    plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
+    plan, resolve, readQuery, pieceHref, iterationsLabel,
     order, biggest, refined, nextPiece, previousPiece,
     entryPixFromSearch, externalReferrer, entryRecord, exitFrom, exitFallback,
     referrerOriginMatches, backSealMode, backClick,
