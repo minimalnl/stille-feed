@@ -117,14 +117,13 @@ body.chrome-off .wrap{padding-top:16px}
 .pix-one{background:var(--card);border:1px solid var(--line);border-radius:0;overflow:hidden;color:var(--muted)}
 .pix-one a.pix-shot,.pix-one .pix-empty{display:block;width:100%;aspect-ratio:1/1;border-radius:0;line-height:0;color:inherit}
 .pix-one img{display:block;width:100%;height:100%;aspect-ratio:1/1;object-fit:cover;border-radius:0;filter:none;background:var(--sand)}
-.pix-one-meta{display:flex;flex-direction:column;font-size:13px}
-.pix-one-lead{display:block;padding:10px 14px;white-space:nowrap}
-.pix-price{color:var(--muted);text-decoration:none}
-.pix-price:hover{text-decoration:underline}
+.pix-one-meta{display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;font-size:13px}
+.pix-one-lead{display:flex;align-items:baseline;gap:14px;min-width:0;white-space:nowrap}
+.pix-one-lead a{color:var(--sage-d);text-decoration:none;white-space:nowrap}
+.pix-one-lead a:hover{text-decoration:underline}
+.pix-price{flex:none;color:var(--ink);border:1px solid var(--sage);border-radius:0;padding:1px 6px;line-height:1.3;text-decoration:none}
+.pix-price:hover{border-color:var(--sage-d);color:var(--sage-d)}
 .pix-price:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
-.pix-links{display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 14px;border-top:1px solid var(--line)}
-.pix-links a{color:var(--sage-d);text-decoration:none}
-.pix-links a:hover{text-decoration:underline}
 .pixsec{margin:0 0 56px}
 .sechead{display:flex;align-items:center;justify-content:space-between;margin:0 4px 16px}
 .sechead h2{font-weight:400;font-size:18px;margin:0}
@@ -134,9 +133,8 @@ body.chrome-off .wrap{padding-top:16px}
 .pix > a.pix-open{display:block;color:inherit;text-decoration:none}
 .pix.skeleton{aspect-ratio:1/1;height:auto}
 .pix img,.pix-empty{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--sand)}
-.pix-cap{display:flex;flex-wrap:nowrap;align-items:baseline;font-size:12px;padding:8px 12px;white-space:nowrap}
-.pix-cap a{color:inherit;text-decoration:none}
-.pix-cap a.pix-open,.pix-cap-sale{white-space:nowrap}
+.pix-cap{display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:8px 10px;white-space:nowrap}
+.pix-cap a.pix-open{color:inherit;text-decoration:none;white-space:nowrap}
 .pix:hover,.pix.on{border-color:var(--sage)}
 .pix-stage{display:block}
 .pix-nav{display:flex;justify-content:space-between;align-items:center}
