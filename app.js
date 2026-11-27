@@ -256,7 +256,7 @@ function pixCard(p) {
   const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy" decoding="async">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy" decoding="async">`) : '<span class="pix-empty"></span>';
   const count = PixLink.iterationsLabel(p.iterations);
   const sale = priceSeal(p.id);
-  return `<div class="pix${open ? ' on' : ''}" data-id="${esc(p.id)}"><a class="pix-open" href="${esc(href)}" title="View this Burnt Pix">${imgTag}</a><span class="pix-cap"><a class="pix-open" href="${esc(href)}">${esc(count)}</a>${sale ? `<span class="pix-cap-sale"> · ${sale}</span>` : ''}</span></div>`;
+  return `<div class="pix${open ? ' on' : ''}" data-id="${esc(p.id)}"><a class="pix-open" href="${esc(href)}" title="View this Burnt Pix">${imgTag}</a><span class="pix-cap"><a class="pix-open" href="${esc(href)}">${esc(count)}</a>${sale}</span></div>`;
 }
 // The picture itself waits until the card is near the screen. Thumbs that are already filled in stay as they are.
 // Cards are not watched until the large view has taken its space: on a short first paint the grid is in
@@ -509,7 +509,7 @@ function renderPixFocus(cards) {
     const addr = PixLink.addressOf(p.id) || '';
     const suffix = many && addr ? ' · ' + addr.slice(0, 8) + '…' + addr.slice(-4) : '';
     const sale = priceSeal(p.id);
-    return `<article class="pix-one">${img}<div class="pix-one-meta"><span class="pix-one-lead"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span>${sale ? ` · ${sale}` : ''}</span><span class="pix-links"><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a></span></div></article>`;
+    return `<article class="pix-one">${img}<div class="pix-one-meta"><span class="pix-one-lead"><span>${esc(PixLink.iterationsLabel(p.iterations) + suffix)}</span><a href="${esc(p.link)}" target="_blank" rel="noopener">Universal Everything ↗</a></span>${sale}</div></article>`;
   }).join('');
   syncNext();
   syncBackSeal();
