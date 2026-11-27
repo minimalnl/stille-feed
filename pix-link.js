@@ -235,11 +235,29 @@
     return { kind: 'close', href: exitFallback(from, ref) };
   }
 
+  // Mark's Burnt Pix listed on Hup. Edit the label and the link here.
+  // Checked against https://hup.social/api/v1/nfts for seller 0x7070…47fd on LUKSO:
+  //   1724 …fb84 is 75 LYX, 1723 …b538 is 55 LYX, 1722 …fcdf is 125 LYX.
+  const HUP_LISTINGS = [
+    { id: '0x00000000000000000000000026c8899b1ddd94a50b1f792283b03cef9a00fb84', label: '75 LYX', href: 'https://hup.social/nfts/42/1724' },
+    { id: '0x0000000000000000000000000d80e5735fa76f020d5eae3a8c01dea7674db538', label: '55 LYX', href: 'https://hup.social/nfts/42/1723' },
+    { id: '0x0000000000000000000000008cb52d60b5e0d30dd3eb54c109f2033f846ffcdf', label: '125 LYX', href: 'https://hup.social/nfts/42/1722' },
+  ];
+  function listingFor(tokenId) {
+    const addr = addressOf(tokenId) || normalizeId(tokenId);
+    if (!addr) return null;
+    for (const sale of HUP_LISTINGS) {
+      if (addressOf(sale.id) === addr) return { label: sale.label, href: sale.href };
+    }
+    return null;
+  }
+
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
     plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
     order, biggest, refined, nextPiece, previousPiece,
     entryPixFromSearch, externalReferrer, entryRecord, exitFrom, exitFallback,
     referrerOriginMatches, backSealMode, backClick,
+    HUP_LISTINGS, listingFor,
   };
 })();
