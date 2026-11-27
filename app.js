@@ -254,9 +254,9 @@ function pixCard(p) {
   const open = (pix.focusIds || []).some((id) => pixKey(id) === pixKey(p.id));
   const href = PixLink.pieceHref(location.href, p.id, state.address);
   const imgTag = p.img ? (p.img1x ? `<img src="${esc(p.img1x)}" srcset="${esc(p.img1x)} 1x, ${esc(p.img)} 2x" alt="Burnt Pix" loading="lazy" decoding="async">` : `<img src="${esc(p.img)}" alt="Burnt Pix" loading="lazy" decoding="async">`) : '<span class="pix-empty"></span>';
-  return `<div class="pix-tile"><a class="pix${open ? ' on' : ''}" href="${esc(href)}" data-id="${esc(p.id)}" title="View this Burnt Pix">
+  return `<a class="pix${open ? ' on' : ''}" href="${esc(href)}" data-id="${esc(p.id)}" title="View this Burnt Pix">
     ${imgTag}
-    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>${priceSeal(p.id)}</div>`;
+    <span class="pix-cap">${p.iterations != null ? Number(p.iterations).toLocaleString('en-US') + ' iterations' : 'Burnt Pix'}</span></a>`;
 }
 // The picture itself waits until the card is near the screen. Thumbs that are already filled in stay as they are.
 // Cards are not watched until the large view has taken its space: on a short first paint the grid is in
