@@ -126,14 +126,6 @@
     const s = clean(owner || '');
     return /^[0-9a-f]{40}$/.test(s) ? '0x' + s : null;
   }
-  // Same-site link to a profile, without a piece selected, so that profile's biggest pix leads.
-  function ownerHref(href, owner) {
-    const u = new URL(href, 'https://minimalnl.github.io');
-    u.searchParams.set('address', addressParam(owner) || OWNER);
-    u.searchParams.delete('pix');
-    u.searchParams.delete('id');
-    return `${u.pathname}${u.search}${u.hash}`;
-  }
   // Shareable link to one piece. Uses the short ?pix= form and keeps the profile in ?address=.
   function pieceHref(href, tokenId, owner) {
     const u = new URL(href, 'https://minimalnl.github.io');
@@ -254,7 +246,7 @@
 
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
-    plan, resolve, readQuery, ownerHref, pieceHref, iterationsLabel,
+    plan, resolve, readQuery, pieceHref, iterationsLabel,
     order, biggest, refined, nextPiece, previousPiece,
     entryPixFromSearch, externalReferrer, entryRecord, exitFrom, exitFallback,
     referrerOriginMatches, backSealMode, backClick,

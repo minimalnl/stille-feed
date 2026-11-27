@@ -117,12 +117,12 @@ body.chrome-off .wrap{padding-top:16px}
 .pix-one{background:var(--card);border:1px solid var(--line);border-radius:0;overflow:hidden;color:var(--muted)}
 .pix-one a.pix-shot,.pix-one .pix-empty{display:block;width:100%;aspect-ratio:1/1;border-radius:0;line-height:0;color:inherit}
 .pix-one img{display:block;width:100%;height:100%;aspect-ratio:1/1;object-fit:cover;border-radius:0;filter:none;background:var(--sand)}
-.pix-one-meta{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px 16px;padding:10px 14px;font-size:13px}
-.pix-one-lead{display:inline-flex;align-items:baseline;gap:10px}
-.pix-price{color:var(--muted);font-size:13px;line-height:1.2;text-decoration:none}
+.pix-one-meta{display:flex;flex-direction:column;font-size:13px}
+.pix-one-lead{display:block;padding:10px 14px}
+.pix-price{color:var(--muted);text-decoration:none}
 .pix-price:hover{text-decoration:underline}
 .pix-price:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
-.pix-links{display:flex;flex-wrap:wrap;gap:8px 14px}
+.pix-links{display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 14px;border-top:1px solid var(--line)}
 .pix-links a{color:var(--sage-d);text-decoration:none}
 .pix-links a:hover{text-decoration:underline}
 .pixsec{margin:0 0 56px}
@@ -131,9 +131,12 @@ body.chrome-off .wrap{padding-top:16px}
 .sechead span{font-size:13px;color:var(--muted)}
 .pixgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .pix{display:block;background:var(--card);border:1px solid var(--line);border-radius:0;overflow:hidden;text-decoration:none;color:var(--muted)}
+.pix > a.pix-open{display:block;color:inherit;text-decoration:none}
 .pix.skeleton{aspect-ratio:1/1;height:auto}
 .pix img,.pix-empty{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--sand)}
-.pix-cap{display:block;font-size:12px;padding:8px 12px}
+.pix-cap{display:flex;flex-wrap:wrap;align-items:baseline;font-size:12px;padding:8px 12px}
+.pix-cap a{color:inherit;text-decoration:none}
+.pix-cap a.pix-open,.pix-cap-sale{white-space:nowrap}
 .pix:hover,.pix.on{border-color:var(--sage)}
 .pix-stage{display:block}
 .pix-nav{display:flex;justify-content:space-between;align-items:center}
