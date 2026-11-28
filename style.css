@@ -1,5 +1,7 @@
 :root{
   --r:18px;
+  /* Light text on the dark theme. One value; muted text is a dimmer mix of it. */
+  --bright:#3DFF8A;
 }
 /* Kunstobject (default): neutral gallery surface */
 :root,[data-theme="kunstobject"]{
@@ -12,8 +14,8 @@
 /* Zwart (dark): match Hup's dark theme */
 [data-theme="zwart"]{
   --bg:#131313; --card:#191919; --sand:#1f1f1f; --sand-2:#252525;
-  --sage:#bfcbb1; --sage-d:#8d9c80; --ink:#fff; --muted:#8a8c82; --line:#2f2f2f;
-  --desc:#e7e9ea; --hint:#8a8c82; --gg-sub:#e7e9ea;
+  --sage:#bfcbb1; --sage-d:#8d9c80; --ink:var(--bright); --muted:color-mix(in srgb, var(--bright) 62%, var(--bg)); --line:#2f2f2f;
+  --desc:var(--bright); --hint:var(--muted); --gg-sub:var(--bright);
   --btn-text:#131313; --btn-text-hover:#131313; --gg-new-bg:rgba(25,25,25,.85);
   color-scheme:dark;
 }

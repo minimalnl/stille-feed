@@ -173,6 +173,9 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(html, /fill="#fff"/);
   assert.doesNotMatch(html, /socialSkull|skull/);
   const css = fs.readFileSync(new URL('style.css', root), 'utf8');
+  assert.match(css, /--bright:#3DFF8A/);
+  assert.match(css, /\[data-theme="zwart"\]\{[^}]*--ink:var\(--bright\)/);
+  assert.match(css, /\[data-theme="zwart"\]\{[^}]*--muted:color-mix\(in srgb, var\(--bright\) 62%, var\(--bg\)\)/);
   assert.match(css, /#e04b4b/);
   assert.doesNotMatch(css, /\.pix-next\{[^}]*position:fixed/);
   assert.match(css, /\.pix-next\{[^}]*width:44px/);
