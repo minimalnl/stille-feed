@@ -89,6 +89,18 @@
     if (!Number.isFinite(n)) return 'Burnt Pix';
     return (n / 1e6).toFixed(2) + 'M iterations';
   }
+  // Sum of iteration counts already on the pieces. Zeros are included and add nothing.
+  // Missing counts are skipped; this does not fetch them.
+  function iterationsTotal(pieces) {
+    let sum = 0;
+    for (const p of pieces || []) {
+      const raw = p && p.iterations;
+      if (raw == null || raw === '') continue;
+      const n = typeof raw === 'number' ? raw : Number(String(raw).trim());
+      if (Number.isFinite(n) && n > 0) sum += n;
+    }
+    return sum;
+  }
   // Most iterations first. Ties break on the token address, lowest first, so the leader is stable.
   function order(pieces) {
     return [...(pieces || [])].map((p, i) => ({ p, i })).sort((a, b) => {
@@ -111,6 +123,12 @@
       const n = typeof value === 'number' ? value : Number(String(value).trim());
       return Number.isFinite(n) && n > 0;
     });
+  }
+  // Default-profile line. The count is the refined pieces the grid shows; unrefined stay out.
+  // The sum uses the counts already on those pieces. A comma keeps it one quiet phrase.
+  function profileLine(pieces) {
+    const count = refined(pieces).length;
+    return count + ' refined, ' + iterationsLabel(iterationsTotal(pieces));
   }
   // step +1 is the next-smaller piece (the arrow). The list wraps, so the smallest leads back to the biggest.
   function stepPiece(pieces, currentId, step) {
@@ -248,7 +266,7 @@
 
   globalThis.PixLink = {
     OWNER, normalizePix, normalizeId, addressOf, tokenIdFromAddress, shortOf,
-    plan, resolve, readQuery, pieceHref, iterationsLabel,
+    plan, resolve, readQuery, pieceHref, iterationsLabel, iterationsTotal, profileLine,
     order, biggest, refined, nextPiece, previousPiece,
     entryPixFromSearch, externalReferrer, entryRecord, exitFrom, exitFallback,
     referrerOriginMatches, backSealMode, backClick,

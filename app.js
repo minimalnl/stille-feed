@@ -293,16 +293,64 @@ function settleFocus() {
     armPixCard(item.card, item.p, item.gen);
   }
 }
+let saleOnly = false;
+function saleOn() {
+  try { return new URLSearchParams(location.search).get('sale') === '1'; } catch { return false; }
+}
+function gridPieces() {
+  return saleOnly ? pix.pieces.filter((p) => PixLink.listingFor(p.id)) : pix.pieces;
+}
+function syncSaleUi() {
+  const toggle = $('#saleToggle');
+  const clear = $('#saleClear');
+  if (toggle) toggle.setAttribute('aria-pressed', saleOnly ? 'true' : 'false');
+  if (clear) clear.hidden = !saleOnly;
+}
+function writeSale(on) {
+  const u = new URL(location.href);
+  if (on) u.searchParams.set('sale', '1');
+  else u.searchParams.delete('sale');
+  history.replaceState(null, '', `${u.pathname}${u.search}${u.hash}`);
+}
+function redrawGrid() {
+  pix.shown = 0;
+  const grid = $('#pixGrid');
+  const foot = $('#pixFoot');
+  if (grid) grid.innerHTML = '';
+  if (foot) foot.innerHTML = '';
+  showMorePix();
+}
+function setSaleOnly(on) {
+  saleOnly = !!on;
+  syncSaleUi();
+  writeSale(saleOnly);
+  const sec = $('#pixSection');
+  if (!sec || sec.hidden || !pix.pieces.length) return;
+  redrawGrid();
+}
+let pixTotal = null;
+function rememberPixTotal(address, pieces) {
+  if (String(address || '').toLowerCase() !== DEFAULT_ADDRESS) { pixTotal = null; return; }
+  pixTotal = { address: DEFAULT_ADDRESS, label: PixLink.profileLine(pieces) };
+  const row = document.querySelector('#profile .idrow');
+  if (!row || document.querySelector('#profile .pix-total')) return;
+  row.insertAdjacentHTML('afterend', `<p class="pix-total">${esc(pixTotal.label)}</p>`);
+}
+function pixTotalHtml(address) {
+  if (!pixTotal || String(address || '').toLowerCase() !== pixTotal.address) return '';
+  return `<p class="pix-total">${esc(pixTotal.label)}</p>`;
+}
 function showMorePix() {
   const gen = pix.gen;
-  const next = pix.pieces.slice(pix.shown, pix.shown + PIX_PAGE);
+  const source = gridPieces();
+  const next = source.slice(pix.shown, pix.shown + PIX_PAGE);
   pix.shown += next.length;
   const grid = $('#pixGrid');
   next.forEach((p) => {
     grid.insertAdjacentHTML('beforeend', pixCard(p));
     whenPixVisible(grid.lastElementChild, p, gen);
   });
-  const rest = pix.pieces.length - pix.shown;
+  const rest = source.length - pix.shown;
   $('#pixFoot').innerHTML = rest > 0 ? `<button class="more" id="pixMore">Show more</button>` : '';
   if (rest > 0) $('#pixMore').onclick = showMorePix;
   markOpenThumb();
@@ -362,10 +410,14 @@ async function showPix(address) {
   }
   if (gen !== pix.gen || address !== state.address) return;
   // The heading stays hidden until this filter has run, so a raw total never flashes.
+  // Profile line from this list: refined count for the grid, sum of the counts already loaded.
+  rememberPixTotal(address, pieces);
   pieces = PixLink.refined(pieces);
   if (!pieces.length) { noPieces(gen, address); return; }
   sec.hidden = false;
   pix.pieces = PixLink.order(pieces);
+  saleOnly = saleOn();
+  syncSaleUi();
   syncNext();
   $('#pixGrid').innerHTML = ''; $('#pixFoot').innerHTML = '';
   // The large picture is chosen and fetched before any thumbnail asks for its SVG.
@@ -755,6 +807,7 @@ function renderProfile(p, address) {
       <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
       <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener" title="Open on Universal Everything">profile ↗</a>
     </div>
+    ${pixTotalHtml(address)}
     ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ''}`;
 }
 // Feed column is max 672 px wide: request 720 / 1440 px (sharp on retina) instead of the original,
@@ -874,6 +927,7 @@ function loadProfile(address) {
       <button type="button" class="addr" data-addr="${esc(address)}" title="Copy ${esc(address)}" aria-label="Copy address ${esc(address)}">${esc(short(address))}</button>
       <a class="ue" href="https://universaleverything.io/${esc(address)}" target="_blank" rel="noopener" title="Open on Universal Everything">profile ↗</a>
     </div>
+      ${pixTotalHtml(address)}
       <p class="desc">${isContract
         ? 'Profile metadata could not be loaded — the on-chain IPFS file may be missing. Burnt Pix, Moments, and Hup below still show when they exist.'
         : 'No Universal Profile contract at this address on LUKSO mainnet.'}</p>
@@ -984,6 +1038,10 @@ $('#filters').addEventListener('click', (e) => {
   renderFeed();
 });
 
+const saleToggle = $('#saleToggle');
+if (saleToggle) saleToggle.addEventListener('click', () => setSaleOnly(!saleOnly));
+const saleClear = $('#saleClear');
+if (saleClear) saleClear.addEventListener('click', () => setSaleOnly(false));
 $('#pixGrid').addEventListener('click', (e) => {
   if (e.target.closest('a.pix-price')) return;
   const card = e.target.closest('#pixGrid .pix');

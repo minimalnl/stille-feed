@@ -218,6 +218,27 @@ test('the page loads the linker and asks the feed to open a linked piece', () =>
   assert.match(priceRule, /text-decoration:none/);
   assert.doesNotMatch(priceRule, /background/);
   assert.match(css, /\.pix-price:hover\{[^}]*border-color:var\(--sage-d\)/);
+  assert.match(html, /id="saleToggle"[^>]*>For sale</);
+  assert.match(html, /id="saleClear"[^>]*hidden[^>]*>×</);
+  assert.doesNotMatch(html.slice(html.indexOf('id="saleToggle"'), html.indexOf('id="saleClear"')), /\d/);
+  const saleRule = css.slice(css.indexOf('.sale-toggle{'), css.indexOf('}', css.indexOf('.sale-toggle{')));
+  assert.match(saleRule, /border:1px solid var\(--sage\)/);
+  assert.match(saleRule, /border-radius:0/);
+  assert.doesNotMatch(saleRule, /background:var/);
+  assert.match(css, /\.sale-clear\{[^}]*color:#e04b4b/);
+  assert.match(css, /\.sale-clear\{[^}]*border:0/);
+  assert.match(css, /\.pix-total\{[^}]*color:var\(--muted\)/);
+  const moreFn = appjs.slice(appjs.indexOf('function showMorePix'), appjs.indexOf('function noPieces'));
+  assert.match(moreFn, /gridPieces\(\)/);
+  assert.match(appjs, /pix\.pieces\.filter\(\(p\) => PixLink\.listingFor\(p\.id\)\)/);
+  assert.match(appjs, /searchParams\.set\('sale', '1'\)/);
+  assert.match(appjs, /history\.replaceState/);
+  const moveFn = appjs.slice(appjs.indexOf('function movePix'), appjs.indexOf('async function idsOf'));
+  assert.doesNotMatch(moveFn, /listingFor|saleOnly/);
+  const totalFn = appjs.slice(appjs.indexOf('function rememberPixTotal'), appjs.indexOf('function pixTotalHtml'));
+  assert.match(totalFn, /DEFAULT_ADDRESS/);
+  assert.match(totalFn, /PixLink\.profileLine/);
+  assert.doesNotMatch(totalFn, /rpc|fetch|getJSON|loadPixIterations/);
   assert.match(css, /\.pix-one-meta\{[^}]*font-size:13px/);
   assert.match(css, /\.pix-one-meta\{[^}]*justify-content:space-between/);
   assert.match(css, /\.pix-one-meta\{[^}]*flex-wrap:nowrap/);
@@ -387,4 +408,19 @@ test('iteration text is millions with two decimals', () => {
   assert.equal(PixLink.iterationsLabel(null), 'Burnt Pix');
   assert.equal(PixLink.iterationsLabel(''), 'Burnt Pix');
   assert.equal(PixLink.iterationsLabel('nope'), 'Burnt Pix');
+  assert.equal(PixLink.iterationsTotal([
+    { iterations: 7000000 },
+    { iterations: 4000000 },
+    { iterations: 0 },
+    { iterations: null },
+    { iterations: '1500000' },
+  ]), 12500000);
+  assert.equal(PixLink.iterationsLabel(PixLink.iterationsTotal([{ iterations: 12340000 }, { iterations: 0 }])), '12.34M iterations');
+  assert.equal(PixLink.profileLine([
+    { iterations: 7000000 },
+    { iterations: 0 },
+    { iterations: null },
+    { iterations: '5340000' },
+  ]), '2 refined, 12.34M iterations');
+  assert.equal(PixLink.profileLine([]), '0 refined, 0.00M iterations');
 });
